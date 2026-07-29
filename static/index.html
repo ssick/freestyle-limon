@@ -21,8 +21,9 @@
         const data = await res.json();
 
         if (data.status === 'ok') {
-          document.getElementById('value').textContent =
-            `${data.value} mg/dL ${data.trend ?? ''}`;
+          const valueEl = document.getElementById('value');
+          valueEl.textContent = `${data.value} mg/dL ${data.trend ?? ''}`;
+          valueEl.style.color = data.is_high ? 'orange' : data.is_low ? 'red' : 'green';
           document.getElementById('timestamp').textContent = data.timestamp
             ? `measured at ${new Date(data.timestamp).toLocaleTimeString()}`
             : '';

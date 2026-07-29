@@ -7,6 +7,8 @@ class GlucoseReading:
     value: float
     trend: Optional[str]
     timestamp: Optional[str]
+    is_high: bool
+    is_low: bool
 
 
 _latest: Optional[GlucoseReading] = None

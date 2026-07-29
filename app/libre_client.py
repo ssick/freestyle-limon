@@ -32,4 +32,10 @@ def fetch_latest_reading(client: PyLibreLinkUp, patient: object) -> GlucoseReadi
     measurement = client.latest(patient_identifier=patient)
     trend = measurement.trend.indicator if measurement.trend is not None else None
     timestamp = measurement.timestamp.isoformat() if measurement.timestamp is not None else None
-    return GlucoseReading(value=measurement.value, trend=trend, timestamp=timestamp)
+    return GlucoseReading(
+        value=measurement.value,
+        trend=trend,
+        timestamp=timestamp,
+        is_high=measurement.is_high,
+        is_low=measurement.is_low,
+    )

@@ -19,7 +19,13 @@ def test_latest_returns_seeded_reading(monkeypatch):
     monkeypatch.setattr(
         state,
         "_latest",
-        GlucoseReading(value=100.0, trend="→", timestamp="2026-07-29T12:00:00"),
+        GlucoseReading(
+            value=100.0,
+            trend="→",
+            timestamp="2026-07-29T12:00:00",
+            is_high=False,
+            is_low=False,
+        ),
     )
 
     with TestClient(app) as client:
@@ -31,4 +37,6 @@ def test_latest_returns_seeded_reading(monkeypatch):
         "value": 100.0,
         "trend": "→",
         "timestamp": "2026-07-29T12:00:00",
+        "is_high": False,
+        "is_low": False,
     }

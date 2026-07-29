@@ -53,6 +53,8 @@ async def get_latest():
         "value": reading.value,
         "trend": reading.trend,
         "timestamp": reading.timestamp,
+        "is_high": reading.is_high,
+        "is_low": reading.is_low,
     }
 
 

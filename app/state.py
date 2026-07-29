@@ -21,6 +21,8 @@ class HistoryPoint:
 
 _latest: Optional[GlucoseReading] = None
 _history: list[HistoryPoint] = []
+_target_low: Optional[int] = None
+_target_high: Optional[int] = None
 
 
 def set_latest(reading: GlucoseReading) -> None:
@@ -39,3 +41,13 @@ def set_history(history: list[HistoryPoint]) -> None:
 
 def get_history() -> list[HistoryPoint]:
     return _history
+
+
+def set_target_range(target_low: int, target_high: int) -> None:
+    global _target_low, _target_high
+    _target_low = target_low
+    _target_high = target_high
+
+
+def get_target_range() -> tuple[Optional[int], Optional[int]]:
+    return _target_low, _target_high

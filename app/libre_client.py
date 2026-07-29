@@ -31,7 +31,7 @@ def build_client() -> tuple[PyLibreLinkUp, object]:
 
 def fetch_reading_and_history(
     client: PyLibreLinkUp, patient: object
-) -> tuple[GlucoseReading, list[HistoryPoint]]:
+) -> tuple[GlucoseReading, list[HistoryPoint], int, int]:
     """Fetch the latest reading and recent history from a single API call.
 
     Uses the deprecated `read()` method rather than `latest()` + `graph()`
@@ -69,4 +69,4 @@ def fetch_reading_and_history(
         for point in response.history
     ]
 
-    return reading, history
+    return reading, history, target_low, target_high

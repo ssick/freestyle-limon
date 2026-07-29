@@ -25,7 +25,9 @@ def test_fetch_reading_and_history_normalizes_measurement():
         is_low=False,
     )
 
-    reading, history = fetch_reading_and_history(FakeClient(current, []), patient="patient-1")
+    reading, history, target_low, target_high = fetch_reading_and_history(
+        FakeClient(current, []), patient="patient-1"
+    )
 
     assert reading.value == 105.0
     assert reading.trend == "→"
@@ -33,12 +35,13 @@ def test_fetch_reading_and_history_normalizes_measurement():
     assert reading.is_high is False
     assert reading.is_low is False
     assert history == []
+    assert (target_low, target_high) == (70, 180)
 
 
 def test_fetch_reading_and_history_handles_missing_trend_and_timestamp():
     current = SimpleNamespace(value=90.0, trend=None, timestamp=None, is_high=False, is_low=False)
 
-    reading, history = fetch_reading_and_history(FakeClient(current, []), patient="patient-1")
+    reading, history, _, _ = fetch_reading_and_history(FakeClient(current, []), patient="patient-1")
 
     assert reading.value == 90.0
     assert reading.trend is None
@@ -48,7 +51,7 @@ def test_fetch_reading_and_history_handles_missing_trend_and_timestamp():
 def test_fetch_reading_and_history_passes_through_is_high():
     current = SimpleNamespace(value=220.0, trend=None, timestamp=None, is_high=True, is_low=False)
 
-    reading, history = fetch_reading_and_history(FakeClient(current, []), patient="patient-1")
+    reading, history, _, _ = fetch_reading_and_history(FakeClient(current, []), patient="patient-1")
 
     assert reading.is_high is True
     assert reading.is_low is False
@@ -57,7 +60,7 @@ def test_fetch_reading_and_history_passes_through_is_high():
 def test_fetch_reading_and_history_passes_through_is_low():
     current = SimpleNamespace(value=60.0, trend=None, timestamp=None, is_high=False, is_low=True)
 
-    reading, history = fetch_reading_and_history(FakeClient(current, []), patient="patient-1")
+    reading, history, _, _ = fetch_reading_and_history(FakeClient(current, []), patient="patient-1")
 
     assert reading.is_high is False
     assert reading.is_low is True
@@ -80,7 +83,7 @@ def test_fetch_reading_and_history_normalizes_history_points():
         ),
     ]
 
-    _, history = fetch_reading_and_history(
+    _, history, target_low, target_high = fetch_reading_and_history(
         FakeClient(current, history_points, target_low=70, target_high=180), patient="patient-1"
     )
 
@@ -90,6 +93,7 @@ def test_fetch_reading_and_history_normalizes_history_points():
     assert history[0].is_high is False
     assert history[1].value == 210.0
     assert history[1].is_high is True
+    assert (target_low, target_high) == (70, 180)
 
 
 def test_fetch_reading_and_history_derives_range_status_from_target_range():
@@ -103,7 +107,7 @@ def test_fetch_reading_and_history_derives_range_status_from_target_range():
         SimpleNamespace(value=200.0, timestamp=None, is_high=False, is_low=False),
     ]
 
-    _, history = fetch_reading_and_history(
+    _, history, _, _ = fetch_reading_and_history(
         FakeClient(current, history_points, target_low=70, target_high=180), patient="patient-1"
     )
 

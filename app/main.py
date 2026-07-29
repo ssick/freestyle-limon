@@ -26,9 +26,12 @@ async def fetch_loop() -> None:
         try:
             if client is None:
                 client, patient = await asyncio.to_thread(build_client)
-            reading, history = await asyncio.to_thread(fetch_reading_and_history, client, patient)
+            reading, history, target_low, target_high = await asyncio.to_thread(
+                fetch_reading_and_history, client, patient
+            )
             state.set_latest(reading)
             state.set_history(history)
+            state.set_target_range(target_low, target_high)
             logger.info("Fetched glucose reading: %s", reading)
         except Exception:
             logger.exception("Failed to fetch glucose reading")
@@ -51,6 +54,7 @@ async def get_latest():
     reading = state.get_latest()
     if reading is None:
         return {"status": "pending"}
+    target_low, target_high = state.get_target_range()
     return {
         "status": "ok",
         "value": reading.value,
@@ -58,6 +62,8 @@ async def get_latest():
         "timestamp": reading.timestamp,
         "is_high": reading.is_high,
         "is_low": reading.is_low,
+        "target_low": target_low,
+        "target_high": target_high,
         "history": [
             {
                 "value": point.value,

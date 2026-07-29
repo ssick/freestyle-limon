@@ -73,7 +73,7 @@
 
     let chartPoints = [];
 
-    function renderHistory(history) {
+    function renderHistory(history, targetLow, targetHigh) {
       const svg = document.getElementById('history-chart');
       if (!history || history.length === 0) {
         svg.innerHTML = '';
@@ -95,6 +95,8 @@
       const tSpan = Math.max(tMax - tMin, 1);
 
       const values = withTime.map(p => p.value);
+      if (typeof targetLow === 'number') values.push(targetLow);
+      if (typeof targetHigh === 'number') values.push(targetHigh);
       const rawMin = Math.min(...values);
       const rawMax = Math.max(...values);
       const pad = Math.max((rawMax - rawMin) * 0.1, 10);
@@ -112,6 +114,20 @@
 
       const dots = chartPoints.map(p => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4" fill="${statusColor(p.is_high, p.is_low)}" stroke="#FFFDF3" stroke-width="2" />`).join('');
 
+      let thresholdLines = '';
+      if (typeof targetHigh === 'number') {
+        const y = yOf(targetHigh).toFixed(1);
+        thresholdLines += `
+          <line x1="${CHART_LEFT}" y1="${y}" x2="${CHART_RIGHT}" y2="${y}" stroke="orange" stroke-opacity="0.5" stroke-width="1" />
+          <text class="chart-axis-label" x="${CHART_RIGHT}" y="${y - 3}" text-anchor="end" fill="orange" fill-opacity="0.9">high ${targetHigh}</text>`;
+      }
+      if (typeof targetLow === 'number') {
+        const y = yOf(targetLow).toFixed(1);
+        thresholdLines += `
+          <line x1="${CHART_LEFT}" y1="${y}" x2="${CHART_RIGHT}" y2="${y}" stroke="red" stroke-opacity="0.5" stroke-width="1" />
+          <text class="chart-axis-label" x="${CHART_RIGHT}" y="${y - 3}" text-anchor="end" fill="red" fill-opacity="0.9">low ${targetLow}</text>`;
+      }
+
       const firstLabel = new Date(tMin).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       const lastLabel = new Date(tMax).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -119,6 +135,7 @@
         <line x1="${CHART_LEFT}" y1="${CHART_BOTTOM}" x2="${CHART_RIGHT}" y2="${CHART_BOTTOM}" stroke="#ddd" stroke-width="1" />
         <path d="${areaPath}" fill="#5C4A00" fill-opacity="0.1" stroke="none" />
         <path d="${linePath}" fill="none" stroke="#5C4A00" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+        ${thresholdLines}
         ${dots}
         <text class="chart-axis-label" x="${CHART_LEFT}" y="${CHART_TOP - 2}" text-anchor="start">${Math.round(vMax)}</text>
         <text class="chart-axis-label" x="${CHART_LEFT}" y="${CHART_BOTTOM - 2}" text-anchor="start">${Math.round(vMin)}</text>
@@ -195,7 +212,7 @@
             : '';
           document.title = `${data.value} mg/dL · Freestyle Limón`;
 
-          renderHistory(data.history);
+          renderHistory(data.history, data.target_low, data.target_high);
         }
       } catch (err) {
         console.error('Failed to poll /api/latest', err);

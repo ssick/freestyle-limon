@@ -40,3 +40,11 @@ def test_latest_returns_seeded_reading(monkeypatch):
         "is_high": False,
         "is_low": False,
     }
+
+
+def test_favicon_served_from_static():
+    with TestClient(app) as client:
+        response = client.get("/static/favicon.png")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"

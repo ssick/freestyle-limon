@@ -2,7 +2,7 @@ from fastapi.testclient import TestClient
 
 from app import state
 from app.main import app
-from app.state import GlucoseReading
+from app.state import GlucoseReading, HistoryPoint
 
 
 def test_latest_pending_when_no_reading(monkeypatch):
@@ -27,6 +27,16 @@ def test_latest_returns_seeded_reading(monkeypatch):
             is_low=False,
         ),
     )
+    monkeypatch.setattr(
+        state,
+        "_history",
+        [
+            HistoryPoint(value=95.0, timestamp="2026-07-29T11:45:00", is_high=False, is_low=False),
+            HistoryPoint(value=100.0, timestamp="2026-07-29T12:00:00", is_high=False, is_low=False),
+        ],
+    )
+    monkeypatch.setattr(state, "_target_low", 70)
+    monkeypatch.setattr(state, "_target_high", 180)
 
     with TestClient(app) as client:
         response = client.get("/api/latest")
@@ -39,6 +49,12 @@ def test_latest_returns_seeded_reading(monkeypatch):
         "timestamp": "2026-07-29T12:00:00",
         "is_high": False,
         "is_low": False,
+        "target_low": 70,
+        "target_high": 180,
+        "history": [
+            {"value": 95.0, "timestamp": "2026-07-29T11:45:00", "is_high": False, "is_low": False},
+            {"value": 100.0, "timestamp": "2026-07-29T12:00:00", "is_high": False, "is_low": False},
+        ],
     }
 
 

@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import state
-from app.libre_client import build_client, fetch_latest_reading
+from app.libre_client import build_client, fetch_reading_and_history
 
 load_dotenv()
 
@@ -26,8 +26,9 @@ async def fetch_loop() -> None:
         try:
             if client is None:
                 client, patient = await asyncio.to_thread(build_client)
-            reading = await asyncio.to_thread(fetch_latest_reading, client, patient)
+            reading, history = await asyncio.to_thread(fetch_reading_and_history, client, patient)
             state.set_latest(reading)
+            state.set_history(history)
             logger.info("Fetched glucose reading: %s", reading)
         except Exception:
             logger.exception("Failed to fetch glucose reading")
@@ -57,6 +58,15 @@ async def get_latest():
         "timestamp": reading.timestamp,
         "is_high": reading.is_high,
         "is_low": reading.is_low,
+        "history": [
+            {
+                "value": point.value,
+                "timestamp": point.timestamp,
+                "is_high": point.is_high,
+                "is_low": point.is_low,
+            }
+            for point in state.get_history()
+        ],
     }
 
 

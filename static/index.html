@@ -27,6 +27,22 @@
   #lemon-digits { font-family: 'Courier New', monospace; font-weight: 700; font-size: 0.85rem; line-height: 1; }
   #value { font-size: 4rem; }
   #timestamp { color: #666; }
+  #chart-wrap { position: relative; max-width: 480px; margin: 2rem auto 0; padding: 0 1rem; }
+  #history-chart { width: 100%; height: auto; display: block; overflow: visible; }
+  .chart-axis-label { font-size: 10px; fill: #666; }
+  #chart-tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: #5C4A00;
+    color: #FFFDF3;
+    font-size: 0.75rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transform: translate(-50%, -130%);
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.1s;
+  }
 </style>
 </head>
 <body>
@@ -43,14 +59,128 @@
   <div id="value">waiting for first reading&hellip;</div>
   <div id="timestamp"></div>
 
+  <div id="chart-wrap">
+    <svg id="history-chart" viewBox="0 0 600 200"></svg>
+    <div id="chart-tooltip"></div>
+  </div>
+
   <script>
+    const CHART_LEFT = 40, CHART_RIGHT = 580, CHART_TOP = 10, CHART_BOTTOM = 170;
+
+    function statusColor(isHigh, isLow) {
+      return isHigh ? 'orange' : isLow ? 'red' : 'green';
+    }
+
+    let chartPoints = [];
+
+    function renderHistory(history) {
+      const svg = document.getElementById('history-chart');
+      if (!history || history.length === 0) {
+        svg.innerHTML = '';
+        chartPoints = [];
+        return;
+      }
+
+      const withTime = history
+        .filter(p => p.timestamp)
+        .map(p => ({ ...p, t: new Date(p.timestamp).getTime() }));
+      if (withTime.length === 0) {
+        svg.innerHTML = '';
+        chartPoints = [];
+        return;
+      }
+
+      const tMin = withTime[0].t;
+      const tMax = withTime[withTime.length - 1].t;
+      const tSpan = Math.max(tMax - tMin, 1);
+
+      const values = withTime.map(p => p.value);
+      const rawMin = Math.min(...values);
+      const rawMax = Math.max(...values);
+      const pad = Math.max((rawMax - rawMin) * 0.1, 10);
+      const vMin = rawMin - pad;
+      const vMax = rawMax + pad;
+      const vSpan = Math.max(vMax - vMin, 1);
+
+      const xOf = t => CHART_LEFT + ((t - tMin) / tSpan) * (CHART_RIGHT - CHART_LEFT);
+      const yOf = v => CHART_BOTTOM - ((v - vMin) / vSpan) * (CHART_BOTTOM - CHART_TOP);
+
+      chartPoints = withTime.map(p => ({ ...p, x: xOf(p.t), y: yOf(p.value) }));
+
+      const linePath = chartPoints.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+      const areaPath = `${linePath} L${chartPoints[chartPoints.length - 1].x.toFixed(1)},${CHART_BOTTOM} L${chartPoints[0].x.toFixed(1)},${CHART_BOTTOM} Z`;
+
+      const dots = chartPoints.map(p => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4" fill="${statusColor(p.is_high, p.is_low)}" stroke="#FFFDF3" stroke-width="2" />`).join('');
+
+      const firstLabel = new Date(tMin).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const lastLabel = new Date(tMax).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      svg.innerHTML = `
+        <line x1="${CHART_LEFT}" y1="${CHART_BOTTOM}" x2="${CHART_RIGHT}" y2="${CHART_BOTTOM}" stroke="#ddd" stroke-width="1" />
+        <path d="${areaPath}" fill="#5C4A00" fill-opacity="0.1" stroke="none" />
+        <path d="${linePath}" fill="none" stroke="#5C4A00" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+        ${dots}
+        <text class="chart-axis-label" x="${CHART_LEFT}" y="${CHART_TOP - 2}" text-anchor="start">${Math.round(vMax)}</text>
+        <text class="chart-axis-label" x="${CHART_LEFT}" y="${CHART_BOTTOM - 2}" text-anchor="start">${Math.round(vMin)}</text>
+        <text class="chart-axis-label" x="${CHART_LEFT}" y="${CHART_BOTTOM + 14}" text-anchor="start">${firstLabel}</text>
+        <text class="chart-axis-label" x="${CHART_RIGHT}" y="${CHART_BOTTOM + 14}" text-anchor="end">${lastLabel}</text>
+        <line id="chart-crosshair" x1="0" y1="${CHART_TOP}" x2="0" y2="${CHART_BOTTOM}" stroke="#5C4A00" stroke-width="1" opacity="0" />
+        <circle id="chart-crosshair-dot" r="5" fill="#5C4A00" stroke="#FFFDF3" stroke-width="2" opacity="0" />
+      `;
+    }
+
+    function setupChartHover() {
+      const svg = document.getElementById('history-chart');
+      const tooltip = document.getElementById('chart-tooltip');
+
+      function hide() {
+        document.getElementById('chart-crosshair')?.setAttribute('opacity', 0);
+        document.getElementById('chart-crosshair-dot')?.setAttribute('opacity', 0);
+        tooltip.style.opacity = 0;
+      }
+
+      function handleMove(clientX, clientY) {
+        if (chartPoints.length === 0) return;
+        const rect = svg.getBoundingClientRect();
+        const svgX = ((clientX - rect.left) / rect.width) * 600;
+
+        let nearest = chartPoints[0];
+        for (const p of chartPoints) {
+          if (Math.abs(p.x - svgX) < Math.abs(nearest.x - svgX)) nearest = p;
+        }
+
+        const crosshair = document.getElementById('chart-crosshair');
+        const dot = document.getElementById('chart-crosshair-dot');
+        if (!crosshair || !dot) return;
+        crosshair.setAttribute('x1', nearest.x);
+        crosshair.setAttribute('x2', nearest.x);
+        crosshair.setAttribute('opacity', 1);
+        dot.setAttribute('cx', nearest.x);
+        dot.setAttribute('cy', nearest.y);
+        dot.setAttribute('opacity', 1);
+
+        tooltip.textContent = `${nearest.value} mg/dL · ${new Date(nearest.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+        tooltip.style.left = `${clientX - rect.left}px`;
+        tooltip.style.top = `${nearest.y / 200 * rect.height}px`;
+        tooltip.style.opacity = 1;
+      }
+
+      svg.addEventListener('mousemove', e => handleMove(e.clientX, e.clientY));
+      svg.addEventListener('mouseleave', hide);
+      svg.addEventListener('touchmove', e => {
+        const touch = e.touches[0];
+        if (touch) handleMove(touch.clientX, touch.clientY);
+      });
+      svg.addEventListener('touchend', hide);
+    }
+
     async function poll() {
       try {
         const res = await fetch('/api/latest');
         const data = await res.json();
 
         if (data.status === 'ok') {
-          const color = data.is_high ? 'orange' : data.is_low ? 'red' : 'green';
+          const color = statusColor(data.is_high, data.is_low);
 
           const valueEl = document.getElementById('value');
           valueEl.textContent = `${data.value} mg/dL ${data.trend ?? ''}`;
@@ -64,12 +194,15 @@
             ? `measured at ${new Date(data.timestamp).toLocaleTimeString()}`
             : '';
           document.title = `${data.value} mg/dL · Freestyle Limón`;
+
+          renderHistory(data.history);
         }
       } catch (err) {
         console.error('Failed to poll /api/latest', err);
       }
     }
 
+    setupChartHover();
     poll();
     setInterval(poll, 30000);
   </script>

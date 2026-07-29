@@ -15,8 +15,16 @@
     border-radius: 0 0 16px 16px;
   }
   header h1 { color: #5C4A00; margin: 0; font-size: 1.75rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
-  header svg { height: 84px; width: 84px; }
-  #lemon-digits { font-family: 'Courier New', monospace; }
+  .lemon-wrap { position: relative; height: 84px; width: 84px; }
+  .lemon-wrap img { height: 100%; width: 100%; display: block; }
+  #lemon-screen {
+    position: absolute;
+    left: 32.02%; top: 37.59%; width: 36.43%; height: 22.85%;
+    border-radius: 6% / 9%;
+    background: #c7c9a4;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #lemon-digits { font-family: 'Courier New', monospace; font-weight: 700; font-size: 0.85rem; line-height: 1; }
   #value { font-size: 4rem; }
   #timestamp { color: #666; }
 </style>
@@ -25,19 +33,10 @@
   <header>
     <h1>
       Freestyle
-      <svg id="lemon-graphic" viewBox="0 0 100 100" role="img" aria-label="lemon glucose display">
-        <defs>
-          <linearGradient id="lemonGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#F9E27A"/>
-            <stop offset="100%" stop-color="#F4D03F"/>
-          </linearGradient>
-        </defs>
-        <ellipse cx="50" cy="56" rx="34" ry="40" fill="url(#lemonGradient)"/>
-        <path d="M46 16 Q50 6 54 16 Q50 20 46 16 Z" fill="#6FAE4B"/>
-        <path d="M54 14 Q66 10 62 20 Q54 22 54 14 Z" fill="#4C8C3B"/>
-        <rect x="27" y="46" width="46" height="26" rx="4" fill="#B9C4B3" stroke="#8B9A8B" stroke-width="1.5"/>
-        <text id="lemon-digits" x="50" y="64" text-anchor="middle" font-size="16" font-weight="700" fill="#2f6f2f">--</text>
-      </svg>
+      <span class="lemon-wrap">
+        <img src="/static/lemon.svg" alt="">
+        <span id="lemon-screen"><span id="lemon-digits">--</span></span>
+      </span>
       Limón
     </h1>
   </header>
@@ -59,7 +58,7 @@
 
           const digitsEl = document.getElementById('lemon-digits');
           digitsEl.textContent = data.value;
-          digitsEl.style.fill = color;
+          digitsEl.style.color = color;
 
           document.getElementById('timestamp').textContent = data.timestamp
             ? `measured at ${new Date(data.timestamp).toLocaleTimeString()}`

@@ -197,12 +197,17 @@
       svg.addEventListener('touchend', hide);
     }
 
+    let hasReading = false;
+    const POLL_INTERVAL_MS = 30000;
+    const RETRY_INTERVAL_MS = 2000;
+
     async function poll() {
       try {
         const res = await fetch('/api/latest');
         const data = await res.json();
 
         if (data.status === 'ok') {
+          hasReading = true;
           const color = statusColor(data.is_high, data.is_low);
 
           const valueEl = document.getElementById('value');
@@ -236,6 +241,8 @@
         }
       } catch (err) {
         console.error('Failed to poll /api/latest', err);
+      } finally {
+        setTimeout(poll, hasReading ? POLL_INTERVAL_MS : RETRY_INTERVAL_MS);
       }
     }
 
@@ -259,7 +266,6 @@
     setupChartHover();
     setupWidgetToggle();
     poll();
-    setInterval(poll, 30000);
   </script>
 </body>
 </html>

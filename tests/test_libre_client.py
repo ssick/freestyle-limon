@@ -58,19 +58,28 @@ def test_fetch_reading_and_history_handles_missing_trend_and_timestamp():
     assert reading.timestamp is None
 
 
-def test_fetch_reading_and_history_passes_through_is_high():
-    current = SimpleNamespace(value=220.0, trend=None, timestamp=None, is_high=True, is_low=False)
+def test_fetch_reading_and_history_derives_is_high_from_target_range():
+    """LibreLinkUp's isHigh flag on the current reading isn't trustworthy either
+    (observed False for a value outside the target range), so status must come
+    from comparing the value against target_high - not the API flag."""
+    current = SimpleNamespace(value=220.0, trend=None, timestamp=None, is_high=False, is_low=False)
 
-    reading, history, _, _ = fetch_reading_and_history(FakeClient(current, []), patient="patient-1")
+    reading, history, _, _ = fetch_reading_and_history(
+        FakeClient(current, [], target_low=70, target_high=180), patient="patient-1"
+    )
 
     assert reading.is_high is True
     assert reading.is_low is False
 
 
-def test_fetch_reading_and_history_passes_through_is_low():
-    current = SimpleNamespace(value=60.0, trend=None, timestamp=None, is_high=False, is_low=True)
+def test_fetch_reading_and_history_derives_is_low_from_target_range():
+    """Same as above but for isLow - the API flag can be False even when the
+    current value is below the patient's target_low threshold."""
+    current = SimpleNamespace(value=60.0, trend=None, timestamp=None, is_high=False, is_low=False)
 
-    reading, history, _, _ = fetch_reading_and_history(FakeClient(current, []), patient="patient-1")
+    reading, history, _, _ = fetch_reading_and_history(
+        FakeClient(current, [], target_low=70, target_high=180), patient="patient-1"
+    )
 
     assert reading.is_high is False
     assert reading.is_low is True

@@ -15,6 +15,17 @@
     border-radius: 0 0 16px 16px;
   }
   header h1 { color: #5C4A00; margin: 0; font-size: 1.75rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
+  #widget-toggle {
+    display: none;
+    margin-left: 0.5rem;
+    border: none;
+    background: none;
+    font-size: 1.25rem;
+    cursor: pointer;
+    opacity: 0.5;
+  }
+  #widget-toggle.visible { display: inline-block; }
+  #widget-toggle.active { opacity: 1; }
   .lemon-wrap { position: relative; height: 84px; width: 84px; }
   .lemon-wrap img { height: 100%; width: 100%; display: block; }
   #lemon-screen {
@@ -54,6 +65,7 @@
         <span id="lemon-screen"><span id="lemon-digits">--</span></span>
       </span>
       Limón
+      <button id="widget-toggle" type="button" title="Toggle floating widget">🍋</button>
     </h1>
   </header>
   <div id="value">waiting for first reading&hellip;</div>
@@ -227,7 +239,25 @@
       }
     }
 
+    function setupWidgetToggle() {
+      const btn = document.getElementById('widget-toggle');
+      // window.pywebview is only injected after the page finishes loading, so
+      // it isn't present yet when this script runs. In plain-browser dev mode
+      // this event simply never fires, leaving the button hidden as intended.
+      window.addEventListener('pywebviewready', async () => {
+        btn.classList.add('visible');
+        const isOpen = await window.pywebview.api.is_widget_open();
+        btn.classList.toggle('active', isOpen);
+      });
+
+      btn.addEventListener('click', async () => {
+        const isOpen = await window.pywebview.api.toggle_widget();
+        btn.classList.toggle('active', isOpen);
+      });
+    }
+
     setupChartHover();
+    setupWidgetToggle();
     poll();
     setInterval(poll, 30000);
   </script>

@@ -87,3 +87,11 @@ def test_widget_page_served_from_static():
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "text/html; charset=utf-8"
+
+
+def test_lcd_font_served_from_static():
+    with TestClient(app) as client:
+        response = client.get("/static/fonts/DSEG7Classic-Bold.woff2")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "font/woff2"

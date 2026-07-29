@@ -7,6 +7,18 @@
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 <meta name="theme-color" content="#F4D03F">
 <style>
+  @font-face {
+    font-family: 'DSEG7Classic';
+    src: url('/static/fonts/DSEG7Classic-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: 'DSEG7Classic';
+    src: url('/static/fonts/DSEG7Classic-Bold.woff2') format('woff2');
+    font-weight: 700;
+    font-display: swap;
+  }
   body { font-family: sans-serif; text-align: center; margin: 0; background: #FFFDF3; }
   header {
     background: linear-gradient(180deg, #F9E27A, #F4D03F);
@@ -25,7 +37,7 @@
     background: #c7c9a4;
     display: flex; align-items: center; justify-content: center;
   }
-  #lemon-digits { font-family: 'Courier New', monospace; font-weight: 700; font-size: 0.85rem; line-height: 1; }
+  #lemon-digits { font-family: 'DSEG7Classic', 'Courier New', monospace; font-weight: 700; font-size: 0.85rem; line-height: 1; }
   #value { font-size: 4rem; }
   #timestamp { color: #666; }
   #chart-wrap { position: relative; max-width: 480px; margin: 2rem auto 0; padding: 0 1rem; }

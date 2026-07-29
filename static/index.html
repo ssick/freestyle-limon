@@ -16,6 +16,7 @@
   }
   header h1 { color: #5C4A00; margin: 0; font-size: 1.75rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
   .lemon-wrap { position: relative; height: 84px; width: 84px; }
+  .lemon-wrap.widget-toggle { cursor: pointer; }
   .lemon-wrap img { height: 100%; width: 100%; display: block; }
   #lemon-screen {
     position: absolute;
@@ -185,12 +186,17 @@
       svg.addEventListener('touchend', hide);
     }
 
+    let hasReading = false;
+    const POLL_INTERVAL_MS = 30000;
+    const RETRY_INTERVAL_MS = 2000;
+
     async function poll() {
       try {
         const res = await fetch('/api/latest');
         const data = await res.json();
 
         if (data.status === 'ok') {
+          hasReading = true;
           const color = statusColor(data.is_high, data.is_low);
 
           const valueEl = document.getElementById('value');
@@ -224,12 +230,26 @@
         }
       } catch (err) {
         console.error('Failed to poll /api/latest', err);
+      } finally {
+        setTimeout(poll, hasReading ? POLL_INTERVAL_MS : RETRY_INTERVAL_MS);
       }
     }
 
+    function setupWidgetToggle() {
+      const wrap = document.querySelector('.lemon-wrap');
+      // window.pywebview is only injected after the page finishes loading, so
+      // it isn't present yet when this script runs. In plain-browser dev mode
+      // this event simply never fires, leaving the lemon non-interactive.
+      window.addEventListener('pywebviewready', () => {
+        wrap.classList.add('widget-toggle');
+        wrap.title = 'Toggle floating widget';
+        wrap.addEventListener('click', () => window.pywebview.api.toggle_widget());
+      });
+    }
+
     setupChartHover();
+    setupWidgetToggle();
     poll();
-    setInterval(poll, 30000);
   </script>
 </body>
 </html>

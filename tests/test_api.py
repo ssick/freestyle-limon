@@ -79,3 +79,11 @@ def test_favicon_served_from_static():
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
+
+
+def test_widget_page_served_from_static():
+    with TestClient(app) as client:
+        response = client.get("/static/widget.html")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "text/html; charset=utf-8"

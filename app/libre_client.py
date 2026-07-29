@@ -45,6 +45,12 @@ def fetch_reading_and_history(
         warnings.simplefilter("ignore", DeprecationWarning)
         response = client.read(patient_identifier=patient)
 
+    # LibreLinkUp's isHigh/isLow flags are unreliable on both the current
+    # reading and historical graph points, so range status is always derived
+    # from the patient's own target range instead of trusting either flag.
+    target_low = response.data.connection.target_low
+    target_high = response.data.connection.target_high
+
     measurement = response.current
     trend = measurement.trend.indicator if measurement.trend is not None else None
     timestamp = measurement.timestamp.isoformat() if measurement.timestamp is not None else None
@@ -52,15 +58,10 @@ def fetch_reading_and_history(
         value=measurement.value,
         trend=trend,
         timestamp=timestamp,
-        is_high=measurement.is_high,
-        is_low=measurement.is_low,
+        is_high=measurement.value > target_high,
+        is_low=measurement.value < target_low,
     )
 
-    # LibreLinkUp doesn't populate isHigh/isLow on historical graph points (always
-    # False), unlike the current reading, so range status has to be derived from
-    # the patient's own target range instead of trusting the flag on each point.
-    target_low = response.data.connection.target_low
-    target_high = response.data.connection.target_high
     history = [
         HistoryPoint(
             value=point.value,

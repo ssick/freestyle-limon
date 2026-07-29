@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -11,7 +12,23 @@ from fastapi.staticfiles import StaticFiles
 from app import state
 from app.libre_client import build_client, fetch_reading_and_history
 
-load_dotenv()
+# When frozen into a standalone executable, __file__ resolves inside the
+# PyInstaller temp extraction dir, not next to the binary the user launched -
+# so .env has to be looked up relative to sys.executable in that case instead.
+# Inside a .app bundle, sys.executable lives at Foo.app/Contents/MacOS/foo, so
+# walk up to the folder containing Foo.app, where a user would naturally drop .env.
+if getattr(sys, "frozen", False):
+    exe_path = Path(sys.executable).resolve()
+    macos_dir = exe_path.parent
+    bundle_dir = macos_dir.parent.parent
+    if macos_dir.name == "MacOS" and macos_dir.parent.name == "Contents" and bundle_dir.suffix == ".app":
+        APP_DIR = bundle_dir.parent
+    else:
+        APP_DIR = macos_dir
+else:
+    APP_DIR = Path(__file__).resolve().parent.parent
+
+load_dotenv(APP_DIR / ".env")
 
 logger = logging.getLogger("freestyle_limon")
 
@@ -32,9 +49,11 @@ async def fetch_loop() -> None:
             state.set_latest(reading)
             state.set_history(history)
             state.set_target_range(target_low, target_high)
+            state.set_error(None)
             logger.info("Fetched glucose reading: %s", reading)
-        except Exception:
+        except Exception as exc:
             logger.exception("Failed to fetch glucose reading")
+            state.set_error(str(exc))
         await asyncio.sleep(FETCH_INTERVAL_SECONDS)
 
 
@@ -53,7 +72,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 async def get_latest():
     reading = state.get_latest()
     if reading is None:
-        return {"status": "pending"}
+        return {"status": "pending", "error": state.get_error()}
     target_low, target_high = state.get_target_range()
     return {
         "status": "ok",

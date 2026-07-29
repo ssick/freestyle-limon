@@ -1,6 +1,16 @@
 from types import SimpleNamespace
 
-from app.libre_client import fetch_reading_and_history
+import pytest
+
+from app.libre_client import build_client, fetch_reading_and_history
+
+
+def test_build_client_raises_friendly_error_when_credentials_missing(monkeypatch):
+    monkeypatch.delenv("LIBRE_EMAIL", raising=False)
+    monkeypatch.delenv("LIBRE_PASSWORD", raising=False)
+
+    with pytest.raises(RuntimeError, match="Missing LIBRE_EMAIL / LIBRE_PASSWORD"):
+        build_client()
 
 
 class FakeClient:

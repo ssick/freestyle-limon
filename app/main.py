@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -11,7 +12,15 @@ from fastapi.staticfiles import StaticFiles
 from app import state
 from app.libre_client import build_client, fetch_latest_reading
 
-load_dotenv()
+# When frozen into a standalone executable, __file__ resolves inside the
+# PyInstaller temp extraction dir, not next to the binary the user launched -
+# so .env has to be looked up relative to sys.executable in that case instead.
+if getattr(sys, "frozen", False):
+    APP_DIR = Path(sys.executable).resolve().parent
+else:
+    APP_DIR = Path(__file__).resolve().parent.parent
+
+load_dotenv(APP_DIR / ".env")
 
 logger = logging.getLogger("freestyle_limon")
 

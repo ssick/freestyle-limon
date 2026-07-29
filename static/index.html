@@ -95,8 +95,6 @@
       const tSpan = Math.max(tMax - tMin, 1);
 
       const values = withTime.map(p => p.value);
-      if (typeof targetLow === 'number') values.push(targetLow);
-      if (typeof targetHigh === 'number') values.push(targetHigh);
       const rawMin = Math.min(...values);
       const rawMax = Math.max(...values);
       const pad = Math.max((rawMax - rawMin) * 0.1, 10);
@@ -115,17 +113,13 @@
       const dots = chartPoints.map(p => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4" fill="${statusColor(p.is_high, p.is_low)}" stroke="#FFFDF3" stroke-width="2" />`).join('');
 
       let thresholdLines = '';
-      if (typeof targetHigh === 'number') {
+      if (typeof targetHigh === 'number' && targetHigh >= vMin && targetHigh <= vMax) {
         const y = yOf(targetHigh).toFixed(1);
-        thresholdLines += `
-          <line x1="${CHART_LEFT}" y1="${y}" x2="${CHART_RIGHT}" y2="${y}" stroke="orange" stroke-opacity="0.5" stroke-width="1" />
-          <text class="chart-axis-label" x="${CHART_RIGHT}" y="${y - 3}" text-anchor="end" fill="orange" fill-opacity="0.9">high ${targetHigh}</text>`;
+        thresholdLines += `<line x1="${CHART_LEFT}" y1="${y}" x2="${CHART_RIGHT}" y2="${y}" stroke="orange" stroke-opacity="0.5" stroke-width="1" />`;
       }
-      if (typeof targetLow === 'number') {
+      if (typeof targetLow === 'number' && targetLow >= vMin && targetLow <= vMax) {
         const y = yOf(targetLow).toFixed(1);
-        thresholdLines += `
-          <line x1="${CHART_LEFT}" y1="${y}" x2="${CHART_RIGHT}" y2="${y}" stroke="red" stroke-opacity="0.5" stroke-width="1" />
-          <text class="chart-axis-label" x="${CHART_RIGHT}" y="${y - 3}" text-anchor="end" fill="red" fill-opacity="0.9">low ${targetLow}</text>`;
+        thresholdLines += `<line x1="${CHART_LEFT}" y1="${y}" x2="${CHART_RIGHT}" y2="${y}" stroke="red" stroke-opacity="0.5" stroke-width="1" />`;
       }
 
       const firstLabel = new Date(tMin).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });

@@ -217,6 +217,10 @@
             }];
           }
           renderHistory(historyForChart, data.target_low, data.target_high);
+        } else if (data.error) {
+          const valueEl = document.getElementById('value');
+          valueEl.textContent = data.error;
+          valueEl.style.color = 'red';
         }
       } catch (err) {
         console.error('Failed to poll /api/latest', err);

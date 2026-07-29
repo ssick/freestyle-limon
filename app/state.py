@@ -23,6 +23,7 @@ _latest: Optional[GlucoseReading] = None
 _history: list[HistoryPoint] = []
 _target_low: Optional[int] = None
 _target_high: Optional[int] = None
+_error: Optional[str] = None
 
 
 def set_latest(reading: GlucoseReading) -> None:
@@ -51,3 +52,12 @@ def set_target_range(target_low: int, target_high: int) -> None:
 
 def get_target_range() -> tuple[Optional[int], Optional[int]]:
     return _target_low, _target_high
+
+
+def set_error(message: Optional[str]) -> None:
+    global _error
+    _error = message
+
+
+def get_error() -> Optional[str]:
+    return _error

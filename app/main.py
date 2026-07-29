@@ -49,9 +49,11 @@ async def fetch_loop() -> None:
             state.set_latest(reading)
             state.set_history(history)
             state.set_target_range(target_low, target_high)
+            state.set_error(None)
             logger.info("Fetched glucose reading: %s", reading)
-        except Exception:
+        except Exception as exc:
             logger.exception("Failed to fetch glucose reading")
+            state.set_error(str(exc))
         await asyncio.sleep(FETCH_INTERVAL_SECONDS)
 
 
@@ -70,7 +72,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 async def get_latest():
     reading = state.get_latest()
     if reading is None:
-        return {"status": "pending"}
+        return {"status": "pending", "error": state.get_error()}
     target_low, target_high = state.get_target_range()
     return {
         "status": "ok",

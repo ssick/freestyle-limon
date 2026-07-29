@@ -4,6 +4,18 @@
 <meta charset="utf-8">
 <title>Freestyle Limón Widget</title>
 <style>
+  @font-face {
+    font-family: 'DSEG7Classic';
+    src: url('/static/fonts/DSEG7Classic-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: 'DSEG7Classic';
+    src: url('/static/fonts/DSEG7Classic-Bold.woff2') format('woff2');
+    font-weight: 700;
+    font-display: swap;
+  }
   html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
   .lemon-wrap { display: block; position: relative; width: 160px; height: 160px; margin: 10px auto; }
   .lemon-wrap img { width: 100%; height: 100%; display: block; }
@@ -14,7 +26,7 @@
     background: #c7c9a4;
     display: flex; align-items: center; justify-content: center;
   }
-  #lemon-digits { font-family: 'Courier New', monospace; font-weight: 700; font-size: 1.6rem; line-height: 1; }
+  #lemon-digits { font-family: 'DSEG7Classic', 'Courier New', monospace; font-weight: 700; font-size: 1.6rem; line-height: 1; }
 </style>
 </head>
 <body>

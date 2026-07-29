@@ -206,7 +206,17 @@
             : '';
           document.title = `${data.value} mg/dL · Freestyle Limón`;
 
-          renderHistory(data.history, data.target_low, data.target_high);
+          let historyForChart = data.history ?? [];
+          const lastPoint = historyForChart[historyForChart.length - 1];
+          if (data.timestamp && (!lastPoint?.timestamp || new Date(data.timestamp) > new Date(lastPoint.timestamp))) {
+            historyForChart = [...historyForChart, {
+              value: data.value,
+              timestamp: data.timestamp,
+              is_high: data.is_high,
+              is_low: data.is_low,
+            }];
+          }
+          renderHistory(historyForChart, data.target_low, data.target_high);
         }
       } catch (err) {
         console.error('Failed to poll /api/latest', err);

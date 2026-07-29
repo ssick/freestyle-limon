@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Glucose Monitor</title>
+<style>
+  body { font-family: sans-serif; text-align: center; margin-top: 4rem; }
+  #value { font-size: 4rem; }
+  #timestamp { color: #666; }
+</style>
+</head>
+<body>
+  <h1>Glucose Monitor</h1>
+  <div id="value">waiting for first reading&hellip;</div>
+  <div id="timestamp"></div>
+
+  <script>
+    async function poll() {
+      try {
+        const res = await fetch('/api/latest');
+        const data = await res.json();
+
+        if (data.status === 'ok') {
+          document.getElementById('value').textContent =
+            `${data.value} mg/dL ${data.trend ?? ''}`;
+          document.getElementById('timestamp').textContent = data.timestamp
+            ? `measured at ${new Date(data.timestamp).toLocaleTimeString()}`
+            : '';
+        }
+      } catch (err) {
+        console.error('Failed to poll /api/latest', err);
+      }
+    }
+
+    poll();
+    setInterval(poll, 30000);
+  </script>
+</body>
+</html>

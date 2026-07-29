@@ -15,14 +15,30 @@
     border-radius: 0 0 16px 16px;
   }
   header h1 { color: #5C4A00; margin: 0; font-size: 1.75rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
-  header img { height: 84px; width: 84px; }
+  .lemon-wrap { position: relative; height: 84px; width: 84px; }
+  .lemon-wrap img { height: 100%; width: 100%; display: block; }
+  #lemon-screen {
+    position: absolute;
+    left: 32.02%; top: 37.59%; width: 36.43%; height: 22.85%;
+    border-radius: 6% / 9%;
+    background: #c7c9a4;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #lemon-digits { font-family: 'Courier New', monospace; font-weight: 700; font-size: 0.85rem; line-height: 1; }
   #value { font-size: 4rem; }
   #timestamp { color: #666; }
 </style>
 </head>
 <body>
   <header>
-    <h1><img src="/static/logo.png" alt="">Freestyle Limón</h1>
+    <h1>
+      Freestyle
+      <span class="lemon-wrap">
+        <img src="/static/lemon.svg" alt="">
+        <span id="lemon-screen"><span id="lemon-digits">--</span></span>
+      </span>
+      Limón
+    </h1>
   </header>
   <div id="value">waiting for first reading&hellip;</div>
   <div id="timestamp"></div>
@@ -34,9 +50,16 @@
         const data = await res.json();
 
         if (data.status === 'ok') {
+          const color = data.is_high ? 'orange' : data.is_low ? 'red' : 'green';
+
           const valueEl = document.getElementById('value');
           valueEl.textContent = `${data.value} mg/dL ${data.trend ?? ''}`;
-          valueEl.style.color = data.is_high ? 'orange' : data.is_low ? 'red' : 'green';
+          valueEl.style.color = color;
+
+          const digitsEl = document.getElementById('lemon-digits');
+          digitsEl.textContent = data.value;
+          digitsEl.style.color = color;
+
           document.getElementById('timestamp').textContent = data.timestamp
             ? `measured at ${new Date(data.timestamp).toLocaleTimeString()}`
             : '';

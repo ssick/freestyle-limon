@@ -13,8 +13,10 @@ def build_client() -> tuple[PyLibreLinkUp, object]:
     Retries once against the region returned by RedirectError, since accounts
     outside the US default region get redirected on first login.
     """
-    email = os.environ["LIBRE_EMAIL"]
-    password = os.environ["LIBRE_PASSWORD"]
+    email = os.environ.get("LIBRE_EMAIL")
+    password = os.environ.get("LIBRE_PASSWORD")
+    if not email or not password:
+        raise RuntimeError("Missing LIBRE_EMAIL / LIBRE_PASSWORD - check your .env file")
 
     client = PyLibreLinkUp(email=email, password=password)
     try:

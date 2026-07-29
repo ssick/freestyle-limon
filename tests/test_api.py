@@ -7,12 +7,27 @@ from app.state import GlucoseReading, HistoryPoint
 
 def test_latest_pending_when_no_reading(monkeypatch):
     monkeypatch.setattr(state, "_latest", None)
+    monkeypatch.setattr(state, "_error", None)
 
     with TestClient(app) as client:
         response = client.get("/api/latest")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "pending"}
+    assert response.json() == {"status": "pending", "error": None}
+
+
+def test_latest_pending_surfaces_fetch_error(monkeypatch):
+    monkeypatch.setattr(state, "_latest", None)
+    monkeypatch.setattr(state, "_error", "Missing LIBRE_EMAIL / LIBRE_PASSWORD - check your .env file")
+
+    with TestClient(app) as client:
+        response = client.get("/api/latest")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "pending",
+        "error": "Missing LIBRE_EMAIL / LIBRE_PASSWORD - check your .env file",
+    }
 
 
 def test_latest_returns_seeded_reading(monkeypatch):

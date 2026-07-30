@@ -59,6 +59,7 @@
         digitsEl.textContent = lastData.value;
         digitsEl.style.color = statusColor(lastData.is_high, lastData.is_low);
       } else {
+        digitsEl.style.color = '';
         digitsEl.textContent = '--';
       }
     }
@@ -69,6 +70,7 @@
         digitsEl.textContent = lastData.trend;
         digitsEl.style.color = statusColor(lastData.is_high, lastData.is_low);
       } else {
+        digitsEl.style.color = '';
         digitsEl.textContent = '--';
       }
     }
@@ -93,7 +95,9 @@
       const screen = document.getElementById('lemon-screen');
 
       if (history.length === 0) {
-        screen.innerHTML = '<span id="lemon-digits">--</span>';
+        const digitsEl = showDigits();
+        digitsEl.style.color = '';
+        digitsEl.textContent = '--';
         return;
       }
 
@@ -124,10 +128,12 @@
 
       const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
       const areaPath = `${linePath} L${points[points.length - 1].x.toFixed(1)},${H} L${points[0].x.toFixed(1)},${H} Z`;
-      const dots = points.map(p => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3" fill="${statusColor(p.is_high, p.is_low)}" />`).join('');
+      const dots = points.length <= 24
+        ? points.map(p => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="1.5" fill="${statusColor(p.is_high, p.is_low)}" />`).join('')
+        : '';
 
       svg.innerHTML = `
-        <path d="${areaPath}" fill="#5C4A00" fill-opacity="0.15" stroke="none" />
+        <path d="${areaPath}" fill="#5C4A00" fill-opacity="0.1" stroke="none" />
         <path d="${linePath}" fill="none" stroke="#5C4A00" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
         ${dots}
       `;

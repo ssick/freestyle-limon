@@ -24,6 +24,7 @@
     left: 24.24%; top: 38.95%; width: 52.73%; height: 22.79%;
     border-radius: 6% / 9%;
     display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
   }
   #lemon-digits { font-family: 'DSEG7Classic', 'Courier New', monospace; font-weight: 700; font-size: 1.6rem; line-height: 1; }
 </style>
@@ -39,6 +40,8 @@
       return isHigh ? 'orange' : isLow ? 'red' : 'green';
     }
 
+    const VIEW_ORDER = ['value', 'trend'];
+    let currentView = 'value';
     let lastData = null;
 
     function renderValue() {
@@ -49,6 +52,27 @@
       } else {
         digitsEl.textContent = '--';
       }
+    }
+
+    function renderTrend() {
+      const digitsEl = document.getElementById('lemon-digits');
+      if (lastData && lastData.trend) {
+        digitsEl.textContent = lastData.trend;
+        digitsEl.style.color = statusColor(lastData.is_high, lastData.is_low);
+      } else {
+        digitsEl.textContent = '--';
+      }
+    }
+
+    function render() {
+      if (currentView === 'trend') renderTrend();
+      else renderValue();
+    }
+
+    function cycleView() {
+      const idx = VIEW_ORDER.indexOf(currentView);
+      currentView = VIEW_ORDER[(idx + 1) % VIEW_ORDER.length];
+      render();
     }
 
     let hasReading = false;
@@ -63,7 +87,7 @@
           hasReading = true;
           lastData = data;
         }
-        renderValue();
+        render();
       } catch (err) {
         console.error('Failed to poll /api/latest', err);
       } finally {
@@ -71,6 +95,7 @@
       }
     }
 
+    document.getElementById('lemon-screen').addEventListener('click', cycleView);
     poll();
   </script>
 </body>

@@ -39,6 +39,18 @@
       return isHigh ? 'orange' : isLow ? 'red' : 'green';
     }
 
+    let lastData = null;
+
+    function renderValue() {
+      const digitsEl = document.getElementById('lemon-digits');
+      if (lastData) {
+        digitsEl.textContent = lastData.value;
+        digitsEl.style.color = statusColor(lastData.is_high, lastData.is_low);
+      } else {
+        digitsEl.textContent = '--';
+      }
+    }
+
     let hasReading = false;
     const POLL_INTERVAL_MS = 30000;
     const RETRY_INTERVAL_MS = 2000;
@@ -47,13 +59,11 @@
       try {
         const res = await fetch('/api/latest');
         const data = await res.json();
-
-        const digitsEl = document.getElementById('lemon-digits');
         if (data.status === 'ok') {
           hasReading = true;
-          digitsEl.textContent = data.value;
-          digitsEl.style.color = statusColor(data.is_high, data.is_low);
+          lastData = data;
         }
+        renderValue();
       } catch (err) {
         console.error('Failed to poll /api/latest', err);
       } finally {

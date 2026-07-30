@@ -2,11 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-See `README.md` for setup, running the dev server, and building the standalone macOS app.
+See `README.md` for setup, running the dev server, running the full test suite, and building
+the standalone macOS app.
 
 ## Commands
 
-- Run all tests: `pytest` (venv must be active, per README)
 - Run a single test file: `pytest tests/test_api.py`
 - Run a single test: `pytest tests/test_api.py::test_latest_returns_seeded_reading`
 

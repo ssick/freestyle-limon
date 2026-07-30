@@ -7,4 +7,5 @@ build/
 dist/
 *.spec
 !freestyle-limon.spec
+.claude/
 

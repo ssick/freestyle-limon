@@ -18,7 +18,10 @@ SCREEN_TOP_FRACTION = 0.3895
 SCREEN_WIDTH_FRACTION = 0.5273
 SCREEN_HEIGHT_FRACTION = 0.2279
 
-COLOR_HIGH = (255, 165, 0)
+# Texas orange (0xBF5700) - matches static/index.html's/widget.html's
+# statusColor() (see tests/test_status_color.py), which replaced the plain
+# CSS orange keyword for its poor contrast against the LCD screen.
+COLOR_HIGH = (191, 87, 0)
 COLOR_LOW = (255, 0, 0)
 COLOR_IN_RANGE = (0, 128, 0)
 COLOR_NO_DATA = (0, 0, 0)

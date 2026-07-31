@@ -144,3 +144,13 @@ def test_pad_to_square_is_noop_for_already_square_image():
 
     assert squared.size == (500, 500)
     assert squared.getpixel((250, 250)) == (0, 255, 0, 255)
+
+
+def test_color_high_matches_frontend_texas_orange():
+    """Drift guard: COLOR_HIGH must track statusColor()'s high color in
+    static/index.html/widget.html (see tests/test_status_color.py). It's an
+    RGB tuple rather than a CSS string, so that guard's text-based regex
+    can't catch it if the frontend color changes again - this can."""
+    from app.dock_icon_render import COLOR_HIGH
+
+    assert COLOR_HIGH == (0xBF, 0x57, 0x00)

@@ -99,3 +99,21 @@ def render_icon(spec: IconRenderSpec, base_image_path, font_path) -> Image.Image
     draw.text((text_x, text_y), spec.text, font=font, fill=color)
 
     return base
+
+
+def pad_to_square(image: Image.Image) -> Image.Image:
+    """Centers image on a transparent square canvas.
+
+    macOS Dock tiles are always square; NSApplication.setApplicationIconImage_
+    stretches a non-square NSImage to fill that square instead of
+    letterboxing it, which visibly distorts lemon.svg's portrait (660x860)
+    aspect ratio. Padding to square here - rather than reshaping the base
+    artwork - keeps render_icon's output matching the base image's own
+    aspect ratio (simpler to reason about/test) while still handing AppKit
+    something that won't be stretched.
+    """
+    width, height = image.size
+    side = max(width, height)
+    square = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+    square.paste(image, ((side - width) // 2, (side - height) // 2), image)
+    return square

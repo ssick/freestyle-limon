@@ -12,7 +12,7 @@ import webview
 from PyObjCTools import AppHelper
 
 from app import state
-from app.dock_icon_render import render_icon, render_spec
+from app.dock_icon_render import pad_to_square, render_icon, render_spec
 from app.main import app
 
 HOST = "127.0.0.1"
@@ -46,7 +46,7 @@ def _update_dock_icon() -> None:
         target_high,
         state.get_error(),
     )
-    pil_image = render_icon(spec, DOCK_ICON_BASE_IMAGE_PATH, DOCK_ICON_FONT_PATH)
+    pil_image = pad_to_square(render_icon(spec, DOCK_ICON_BASE_IMAGE_PATH, DOCK_ICON_FONT_PATH))
 
     buf = io.BytesIO()
     pil_image.save(buf, format="PNG")

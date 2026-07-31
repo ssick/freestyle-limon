@@ -116,3 +116,31 @@ def test_render_icon_no_data_uses_neutral_color_not_status_colors():
     screen_pixels = set(image.crop((x0, y0, x1, y1)).getdata())
     for color in (COLOR_HIGH, COLOR_LOW, COLOR_IN_RANGE):
         assert (*color, 255) not in screen_pixels
+
+
+def test_pad_to_square_centers_portrait_image_on_transparent_square():
+    from PIL import Image
+
+    from app.dock_icon_render import pad_to_square
+
+    portrait = Image.new("RGBA", (660, 860), (255, 0, 0, 255))
+    squared = pad_to_square(portrait)
+
+    assert squared.size == (860, 860)
+    assert squared.mode == "RGBA"
+    # padding added on the sides (narrower dimension) is transparent
+    assert squared.getpixel((10, 430))[3] == 0
+    # original content is preserved, centered
+    assert squared.getpixel((430, 430)) == (255, 0, 0, 255)
+
+
+def test_pad_to_square_is_noop_for_already_square_image():
+    from PIL import Image
+
+    from app.dock_icon_render import pad_to_square
+
+    square_in = Image.new("RGBA", (500, 500), (0, 255, 0, 255))
+    squared = pad_to_square(square_in)
+
+    assert squared.size == (500, 500)
+    assert squared.getpixel((250, 250)) == (0, 255, 0, 255)

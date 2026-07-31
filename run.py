@@ -23,13 +23,13 @@ WIDGET_MARGIN = 24
 
 DOCK_ICON_UPDATE_INTERVAL_SECONDS = 45
 
-# Bundled data files (datas=[...] in freestyle-limon.spec) are placed next to
-# the executable itself in a PyInstaller onedir macOS app bundle (unlike
-# .env, which is an external file the user drops next to the .app - see the
-# path-walking comment at the top of app/main.py) - so these just need the
-# executable's own directory when frozen, and the repo root in dev.
+# Bundled data files (datas=[...] in freestyle-limon.spec) land in
+# Contents/Resources/ in a PyInstaller macOS app bundle, not next to the
+# executable in Contents/MacOS/ (unlike .env, which is an external file the
+# user drops next to the .app - see the path-walking comment at the top of
+# app/main.py).
 if getattr(sys, "frozen", False):
-    ASSETS_DIR = Path(sys.executable).resolve().parent
+    ASSETS_DIR = Path(sys.executable).resolve().parent.parent / "Resources"
 else:
     ASSETS_DIR = Path(__file__).resolve().parent
 

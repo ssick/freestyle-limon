@@ -2,8 +2,10 @@
 import socket
 import threading
 
+import AppKit
 import uvicorn
 import webview
+from PyObjCTools import AppHelper
 
 from app.main import app
 
@@ -12,6 +14,8 @@ HOST = "127.0.0.1"
 WIDGET_WIDTH = 180
 WIDGET_HEIGHT = 180
 WIDGET_MARGIN = 24
+
+DOCK_BADGE_UPDATE_INTERVAL_SECONDS = 45
 
 
 def _run_server(sock: socket.socket) -> None:
@@ -70,6 +74,18 @@ class WidgetApi:
             return WIDGET_MARGIN, WIDGET_MARGIN
 
 
+def _update_dock_badge():
+    from app import state
+    from app.dock_badge import badge_text
+
+    reading = state.get_latest()
+    value = reading.value if reading is not None else None
+    text = badge_text(value, state.get_error())
+    AppKit.NSApplication.sharedApplication().dockTile().setBadgeLabel_(text)
+    AppKit.NSApplication.sharedApplication().dockTile().display()
+    AppHelper.callLater(DOCK_BADGE_UPDATE_INTERVAL_SECONDS, _update_dock_badge)
+
+
 if __name__ == "__main__":
     # Bind to a random free port instead of a fixed one, so the app doesn't
     # clash with anything else already listening on a well-known port.
@@ -89,4 +105,5 @@ if __name__ == "__main__":
         min_size=(360, 600),
         js_api=widget_api,
     )
+    _update_dock_badge()
     webview.start(gui="cocoa")

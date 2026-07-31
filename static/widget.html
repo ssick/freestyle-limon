@@ -132,9 +132,7 @@
 
       const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
       const areaPath = `${linePath} L${points[points.length - 1].x.toFixed(1)},${H} L${points[0].x.toFixed(1)},${H} Z`;
-      const dots = points.length <= 24
-        ? points.map(p => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="1.5" fill="${statusColor(p.is_high, p.is_low)}" />`).join('')
-        : '';
+      const dots = points.map(p => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="1.5" fill="${statusColor(p.is_high, p.is_low)}" />`).join('');
 
       svg.innerHTML = `
         <path d="${areaPath}" fill="#5C4A00" fill-opacity="0.1" stroke="none" />

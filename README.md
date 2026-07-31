@@ -1,6 +1,11 @@
 # freestyle-limon
 
-Fetches Freestyle Libre 3 glucose readings via LibreLinkUp and displays them in a browser.
+Fetches Freestyle Libre 3 glucose readings via LibreLinkUp and displays them in a browser
+or native macOS app.
+
+<img width="400" alt="main window" src="https://github.com/user-attachments/assets/c165fae3-b41f-4d2d-89a4-339894a254ac" />
+
+<img width="137" height="179" alt="floating widget" src="https://github.com/user-attachments/assets/1d13ed5c-d7d9-479e-b216-10df76e31448" />
 
 ## Disclaimer
 

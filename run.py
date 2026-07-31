@@ -16,6 +16,11 @@ WIDGET_HEIGHT = 180
 WIDGET_MARGIN = 24
 
 DOCK_BADGE_UPDATE_INTERVAL_SECONDS = 45
+# Matches static/index.html's/widget.html's RETRY_INTERVAL_MS: poll fast until
+# the first successful reading lands, instead of waiting a full interval.
+DOCK_BADGE_RETRY_INTERVAL_SECONDS = 2
+
+_dock_badge_has_reading = False
 
 
 def _run_server(sock: socket.socket) -> None:
@@ -75,15 +80,21 @@ class WidgetApi:
 
 
 def _update_dock_badge():
+    global _dock_badge_has_reading
+
     from app import state
     from app.dock_badge import badge_text
 
     reading = state.get_latest()
     value = reading.value if reading is not None else None
+    if reading is not None:
+        _dock_badge_has_reading = True
     text = badge_text(value, state.get_error())
     AppKit.NSApplication.sharedApplication().dockTile().setBadgeLabel_(text)
     AppKit.NSApplication.sharedApplication().dockTile().display()
-    AppHelper.callLater(DOCK_BADGE_UPDATE_INTERVAL_SECONDS, _update_dock_badge)
+
+    interval = DOCK_BADGE_UPDATE_INTERVAL_SECONDS if _dock_badge_has_reading else DOCK_BADGE_RETRY_INTERVAL_SECONDS
+    AppHelper.callLater(interval, _update_dock_badge)
 
 
 if __name__ == "__main__":

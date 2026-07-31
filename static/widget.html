@@ -24,8 +24,11 @@
     left: 24.24%; top: 38.95%; width: 52.73%; height: 22.79%;
     border-radius: 6% / 9%;
     display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
   }
   #lemon-digits { font-family: 'DSEG7Classic', 'Courier New', monospace; font-weight: 700; font-size: 1.6rem; line-height: 1; }
+  #lemon-digits.trend-arrow { font-family: -apple-system, system-ui, sans-serif; font-size: 2.2rem; }
+  #lemon-graph { width: 100%; height: 100%; display: block; }
 </style>
 </head>
 <body>
@@ -39,6 +42,117 @@
       return isHigh ? 'orange' : isLow ? 'red' : 'green';
     }
 
+    const VIEW_ORDER = ['value', 'trend', 'graph'];
+    let currentView = 'value';
+    let lastData = null;
+
+    function showDigits() {
+      const screen = document.getElementById('lemon-screen');
+      if (!document.getElementById('lemon-digits')) {
+        screen.innerHTML = '<span id="lemon-digits"></span>';
+      }
+      return document.getElementById('lemon-digits');
+    }
+
+    function renderValue() {
+      const digitsEl = showDigits();
+      digitsEl.classList.remove('trend-arrow');
+      if (lastData) {
+        digitsEl.textContent = lastData.value;
+        digitsEl.style.color = statusColor(lastData.is_high, lastData.is_low);
+      } else {
+        digitsEl.style.color = '';
+        digitsEl.textContent = '--';
+      }
+    }
+
+    function renderTrend() {
+      const digitsEl = showDigits();
+      digitsEl.classList.add('trend-arrow');
+      if (lastData && lastData.trend) {
+        digitsEl.textContent = lastData.trend;
+        digitsEl.style.color = statusColor(lastData.is_high, lastData.is_low);
+      } else {
+        digitsEl.style.color = '';
+        digitsEl.textContent = '--';
+      }
+    }
+
+    function historyForGraph() {
+      if (!lastData) return [];
+      let history = (lastData.history ?? []).filter(p => p.timestamp);
+      const lastPoint = history[history.length - 1];
+      if (lastData.timestamp && (!lastPoint?.timestamp || new Date(lastData.timestamp) > new Date(lastPoint.timestamp))) {
+        history = [...history, {
+          value: lastData.value,
+          timestamp: lastData.timestamp,
+          is_high: lastData.is_high,
+          is_low: lastData.is_low,
+        }];
+      }
+      return history;
+    }
+
+    function renderGraph() {
+      const history = historyForGraph();
+      const screen = document.getElementById('lemon-screen');
+
+      if (history.length === 0) {
+        const digitsEl = showDigits();
+        digitsEl.classList.remove('trend-arrow');
+        digitsEl.style.color = '';
+        digitsEl.textContent = '--';
+        return;
+      }
+
+      const times = history.map(p => new Date(p.timestamp).getTime());
+      const tMin = Math.min(...times), tMax = Math.max(...times);
+      const tSpan = Math.max(tMax - tMin, 1);
+
+      const values = history.map(p => p.value);
+      const vRawMin = Math.min(...values), vRawMax = Math.max(...values);
+      const pad = Math.max((vRawMax - vRawMin) * 0.1, 10);
+      const vMin = vRawMin - pad, vMax = vRawMax + pad;
+      const vSpan = Math.max(vMax - vMin, 1);
+
+      screen.innerHTML = '<svg id="lemon-graph"></svg>';
+      const svg = document.getElementById('lemon-graph');
+      const W = screen.clientWidth, H = screen.clientHeight;
+      svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+      const xOf = t => ((t - tMin) / tSpan) * W;
+      const yOf = v => H - ((v - vMin) / vSpan) * H;
+
+      const points = history.map((p, i) => ({
+        x: xOf(times[i]),
+        y: yOf(p.value),
+        is_high: p.is_high,
+        is_low: p.is_low,
+      }));
+
+      const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+      const areaPath = `${linePath} L${points[points.length - 1].x.toFixed(1)},${H} L${points[0].x.toFixed(1)},${H} Z`;
+      const dots = points.map(p => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="1.5" fill="${statusColor(p.is_high, p.is_low)}" />`).join('');
+
+      svg.innerHTML = `
+        <path d="${areaPath}" fill="#5C4A00" fill-opacity="0.1" stroke="none" />
+        <path d="${linePath}" fill="none" stroke="#5C4A00" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+        ${dots}
+      `;
+    }
+
+    function render() {
+      if (currentView === 'trend') renderTrend();
+      else if (currentView === 'graph') renderGraph();
+      else renderValue();
+    }
+
+    function cycleView() {
+      const idx = VIEW_ORDER.indexOf(currentView);
+      currentView = VIEW_ORDER[(idx + 1) % VIEW_ORDER.length];
+      render();
+    }
+
     let hasReading = false;
     const POLL_INTERVAL_MS = 30000;
     const RETRY_INTERVAL_MS = 2000;
@@ -47,13 +161,11 @@
       try {
         const res = await fetch('/api/latest');
         const data = await res.json();
-
-        const digitsEl = document.getElementById('lemon-digits');
         if (data.status === 'ok') {
           hasReading = true;
-          digitsEl.textContent = data.value;
-          digitsEl.style.color = statusColor(data.is_high, data.is_low);
+          lastData = data;
         }
+        render();
       } catch (err) {
         console.error('Failed to poll /api/latest', err);
       } finally {
@@ -61,6 +173,7 @@
       }
     }
 
+    document.getElementById('lemon-screen').addEventListener('click', cycleView);
     poll();
   </script>
 </body>

@@ -80,7 +80,7 @@
     const CHART_LEFT = 40, CHART_RIGHT = 580, CHART_TOP = 10, CHART_BOTTOM = 170;
 
     function statusColor(isHigh, isLow) {
-      return isHigh ? 'orange' : isLow ? 'red' : 'green';
+      return isHigh ? '#BF5700' : isLow ? 'red' : 'green';
     }
 
     let chartPoints = [];
@@ -127,7 +127,7 @@
       let thresholdLines = '';
       if (typeof targetHigh === 'number' && targetHigh >= vMin && targetHigh <= vMax) {
         const y = yOf(targetHigh).toFixed(1);
-        thresholdLines += `<line x1="${CHART_LEFT}" y1="${y}" x2="${CHART_RIGHT}" y2="${y}" stroke="orange" stroke-opacity="0.5" stroke-width="1" />`;
+        thresholdLines += `<line x1="${CHART_LEFT}" y1="${y}" x2="${CHART_RIGHT}" y2="${y}" stroke="#BF5700" stroke-opacity="0.5" stroke-width="1" />`;
       }
       if (typeof targetLow === 'number' && targetLow >= vMin && targetLow <= vMax) {
         const y = yOf(targetLow).toFixed(1);

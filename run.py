@@ -22,6 +22,11 @@ WIDGET_HEIGHT = 180
 WIDGET_MARGIN = 24
 
 DOCK_ICON_UPDATE_INTERVAL_SECONDS = 45
+# Matches static/index.html's/widget.html's RETRY_INTERVAL_MS: poll fast until
+# the first successful reading lands, instead of waiting a full interval.
+DOCK_ICON_RETRY_INTERVAL_SECONDS = 2
+
+_dock_icon_has_reading = False
 
 # Bundled data files (datas=[...] in freestyle-limon.spec) land in
 # Contents/Resources/ in a PyInstaller macOS app bundle, not next to the
@@ -38,6 +43,8 @@ DOCK_ICON_FONT_PATH = ASSETS_DIR / "static" / "fonts" / "DSEG7Classic-Bold.ttf"
 
 
 def _update_dock_icon() -> None:
+    global _dock_icon_has_reading
+
     reading = state.get_latest()
     target_low, target_high = state.get_target_range()
     spec = render_spec(
@@ -46,6 +53,8 @@ def _update_dock_icon() -> None:
         target_high,
         state.get_error(),
     )
+    if reading is not None:
+        _dock_icon_has_reading = True
     pil_image = pad_to_square(render_icon(spec, DOCK_ICON_BASE_IMAGE_PATH, DOCK_ICON_FONT_PATH))
 
     buf = io.BytesIO()
@@ -54,7 +63,8 @@ def _update_dock_icon() -> None:
     ns_image = AppKit.NSImage.alloc().initWithData_(ns_data)
     AppKit.NSApplication.sharedApplication().setApplicationIconImage_(ns_image)
 
-    AppHelper.callLater(DOCK_ICON_UPDATE_INTERVAL_SECONDS, _update_dock_icon)
+    interval = DOCK_ICON_UPDATE_INTERVAL_SECONDS if _dock_icon_has_reading else DOCK_ICON_RETRY_INTERVAL_SECONDS
+    AppHelper.callLater(interval, _update_dock_icon)
 
 
 def _run_server(sock: socket.socket) -> None:

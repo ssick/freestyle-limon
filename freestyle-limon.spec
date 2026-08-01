@@ -5,7 +5,7 @@ a = Analysis(
     ['run.py'],
     pathex=[],
     binaries=[],
-    datas=[('static', 'static')],
+    datas=[('static', 'static'), ('packaging/lemon-icon-base.png', 'packaging')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

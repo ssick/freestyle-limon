@@ -1,10 +1,18 @@
 """Entry point for the standalone macOS app (see `pyinstaller` build in README)."""
+import io
 import socket
+import sys
 import threading
+from pathlib import Path
 
+import AppKit
+import Foundation
 import uvicorn
 import webview
+from PyObjCTools import AppHelper
 
+from app import state
+from app.dock_icon_render import pad_to_square, render_icon, render_spec
 from app.main import app
 
 HOST = "127.0.0.1"
@@ -12,6 +20,51 @@ HOST = "127.0.0.1"
 WIDGET_WIDTH = 180
 WIDGET_HEIGHT = 180
 WIDGET_MARGIN = 24
+
+DOCK_ICON_UPDATE_INTERVAL_SECONDS = 45
+# Matches static/index.html's/widget.html's RETRY_INTERVAL_MS: poll fast until
+# the first successful reading lands, instead of waiting a full interval.
+DOCK_ICON_RETRY_INTERVAL_SECONDS = 2
+
+_dock_icon_has_reading = False
+
+# Bundled data files (datas=[...] in freestyle-limon.spec) land in
+# Contents/Resources/ in a PyInstaller macOS app bundle, not next to the
+# executable in Contents/MacOS/ (unlike .env, which is an external file the
+# user drops next to the .app - see the path-walking comment at the top of
+# app/main.py).
+if getattr(sys, "frozen", False):
+    ASSETS_DIR = Path(sys.executable).resolve().parent.parent / "Resources"
+else:
+    ASSETS_DIR = Path(__file__).resolve().parent
+
+DOCK_ICON_BASE_IMAGE_PATH = ASSETS_DIR / "packaging" / "lemon-icon-base.png"
+DOCK_ICON_FONT_PATH = ASSETS_DIR / "static" / "fonts" / "DSEG7Classic-Bold.ttf"
+
+
+def _update_dock_icon() -> None:
+    global _dock_icon_has_reading
+
+    reading = state.get_latest()
+    target_low, target_high = state.get_target_range()
+    spec = render_spec(
+        reading.value if reading is not None else None,
+        target_low,
+        target_high,
+        state.get_error(),
+    )
+    if reading is not None:
+        _dock_icon_has_reading = True
+    pil_image = pad_to_square(render_icon(spec, DOCK_ICON_BASE_IMAGE_PATH, DOCK_ICON_FONT_PATH))
+
+    buf = io.BytesIO()
+    pil_image.save(buf, format="PNG")
+    ns_data = Foundation.NSData.dataWithBytes_length_(buf.getvalue(), len(buf.getvalue()))
+    ns_image = AppKit.NSImage.alloc().initWithData_(ns_data)
+    AppKit.NSApplication.sharedApplication().setApplicationIconImage_(ns_image)
+
+    interval = DOCK_ICON_UPDATE_INTERVAL_SECONDS if _dock_icon_has_reading else DOCK_ICON_RETRY_INTERVAL_SECONDS
+    AppHelper.callLater(interval, _update_dock_icon)
 
 
 def _run_server(sock: socket.socket) -> None:
@@ -89,4 +142,5 @@ if __name__ == "__main__":
         min_size=(360, 600),
         js_api=widget_api,
     )
+    _update_dock_icon()
     webview.start(gui="cocoa")

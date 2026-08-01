@@ -24,6 +24,7 @@ _history: list[HistoryPoint] = []
 _target_low: Optional[int] = None
 _target_high: Optional[int] = None
 _error: Optional[str] = None
+_is_stale: bool = False
 
 
 def set_latest(reading: GlucoseReading) -> None:
@@ -61,3 +62,12 @@ def set_error(message: Optional[str]) -> None:
 
 def get_error() -> Optional[str]:
     return _error
+
+
+def set_is_stale(is_stale: bool) -> None:
+    global _is_stale
+    _is_stale = is_stale
+
+
+def get_is_stale() -> bool:
+    return _is_stale

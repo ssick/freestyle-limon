@@ -3,6 +3,7 @@ import logging
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -36,6 +37,16 @@ FETCH_INTERVAL_SECONDS = 60
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 
+def is_stale_reading(current_timestamp: Optional[str], previous_timestamp: Optional[str]) -> bool:
+    """A reading is stale if LibreLinkUp served the same timestamp as last poll.
+
+    The sensor produces a new value once a minute and we poll once a minute
+    (FETCH_INTERVAL_SECONDS), so an unchanged timestamp means nothing new
+    arrived - not that the poll itself failed (that's handled by set_error).
+    """
+    return current_timestamp is not None and current_timestamp == previous_timestamp
+
+
 async def fetch_loop() -> None:
     client = None
     patient = None
@@ -43,12 +54,19 @@ async def fetch_loop() -> None:
         try:
             if client is None:
                 client, patient = await asyncio.to_thread(build_client)
+            previous_reading = state.get_latest()
             reading, history, target_low, target_high = await asyncio.to_thread(
                 fetch_reading_and_history, client, patient
             )
             state.set_latest(reading)
             state.set_history(history)
             state.set_target_range(target_low, target_high)
+            state.set_is_stale(
+                is_stale_reading(
+                    reading.timestamp,
+                    previous_reading.timestamp if previous_reading else None,
+                )
+            )
             state.set_error(None)
             logger.info("Fetched glucose reading: %s", reading)
         except Exception as exc:
@@ -83,6 +101,7 @@ async def get_latest():
         "is_low": reading.is_low,
         "target_low": target_low,
         "target_high": target_high,
+        "stale": state.get_is_stale(),
         "history": [
             {
                 "value": point.value,

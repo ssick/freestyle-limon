@@ -52,6 +52,7 @@ def test_latest_returns_seeded_reading(monkeypatch):
     )
     monkeypatch.setattr(state, "_target_low", 70)
     monkeypatch.setattr(state, "_target_high", 180)
+    monkeypatch.setattr(state, "_is_stale", False)
 
     with TestClient(app) as client:
         response = client.get("/api/latest")
@@ -66,11 +67,36 @@ def test_latest_returns_seeded_reading(monkeypatch):
         "is_low": False,
         "target_low": 70,
         "target_high": 180,
+        "stale": False,
         "history": [
             {"value": 95.0, "timestamp": "2026-07-29T11:45:00", "is_high": False, "is_low": False},
             {"value": 100.0, "timestamp": "2026-07-29T12:00:00", "is_high": False, "is_low": False},
         ],
     }
+
+
+def test_latest_surfaces_stale_reading(monkeypatch):
+    monkeypatch.setattr(
+        state,
+        "_latest",
+        GlucoseReading(
+            value=100.0,
+            trend="→",
+            timestamp="2026-07-29T12:00:00",
+            is_high=False,
+            is_low=False,
+        ),
+    )
+    monkeypatch.setattr(state, "_history", [])
+    monkeypatch.setattr(state, "_target_low", 70)
+    monkeypatch.setattr(state, "_target_high", 180)
+    monkeypatch.setattr(state, "_is_stale", True)
+
+    with TestClient(app) as client:
+        response = client.get("/api/latest")
+
+    assert response.status_code == 200
+    assert response.json()["stale"] is True
 
 
 def test_favicon_served_from_static():

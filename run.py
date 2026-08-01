@@ -12,7 +12,7 @@ import webview
 from PyObjCTools import AppHelper
 
 from app import state
-from app.dock_icon_render import pad_to_square, render_icon, render_spec
+from app.dock_icon_render import blink_alpha, pad_to_square, render_icon, render_spec
 from app.main import app
 
 HOST = "127.0.0.1"
@@ -25,8 +25,13 @@ DOCK_ICON_UPDATE_INTERVAL_SECONDS = 45
 # Matches static/index.html's/widget.html's RETRY_INTERVAL_MS: poll fast until
 # the first successful reading lands, instead of waiting a full interval.
 DOCK_ICON_RETRY_INTERVAL_SECONDS = 2
+# Matches static/index.html's/widget.html's lcd-blink @keyframes half-cycle
+# (1s animation, two phases): ticking the icon this often is what makes it
+# visibly blink while stale.
+DOCK_ICON_BLINK_INTERVAL_SECONDS = 0.5
 
 _dock_icon_has_reading = False
+_dock_icon_blink_on = True
 
 # Bundled data files (datas=[...] in freestyle-limon.spec) land in
 # Contents/Resources/ in a PyInstaller macOS app bundle, not next to the
@@ -43,7 +48,7 @@ DOCK_ICON_FONT_PATH = ASSETS_DIR / "static" / "fonts" / "DSEG7Classic-Bold.ttf"
 
 
 def _update_dock_icon() -> None:
-    global _dock_icon_has_reading
+    global _dock_icon_has_reading, _dock_icon_blink_on
 
     reading = state.get_latest()
     target_low, target_high = state.get_target_range()
@@ -55,7 +60,11 @@ def _update_dock_icon() -> None:
     )
     if reading is not None:
         _dock_icon_has_reading = True
-    pil_image = pad_to_square(render_icon(spec, DOCK_ICON_BASE_IMAGE_PATH, DOCK_ICON_FONT_PATH))
+
+    is_stale = state.get_is_stale()
+    _dock_icon_blink_on = (not _dock_icon_blink_on) if is_stale else True
+    alpha = blink_alpha(is_stale, _dock_icon_blink_on)
+    pil_image = pad_to_square(render_icon(spec, DOCK_ICON_BASE_IMAGE_PATH, DOCK_ICON_FONT_PATH, alpha=alpha))
 
     buf = io.BytesIO()
     pil_image.save(buf, format="PNG")
@@ -63,7 +72,10 @@ def _update_dock_icon() -> None:
     ns_image = AppKit.NSImage.alloc().initWithData_(ns_data)
     AppKit.NSApplication.sharedApplication().setApplicationIconImage_(ns_image)
 
-    interval = DOCK_ICON_UPDATE_INTERVAL_SECONDS if _dock_icon_has_reading else DOCK_ICON_RETRY_INTERVAL_SECONDS
+    if is_stale:
+        interval = DOCK_ICON_BLINK_INTERVAL_SECONDS
+    else:
+        interval = DOCK_ICON_UPDATE_INTERVAL_SECONDS if _dock_icon_has_reading else DOCK_ICON_RETRY_INTERVAL_SECONDS
     AppHelper.callLater(interval, _update_dock_icon)
 
 

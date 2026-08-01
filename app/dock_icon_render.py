@@ -26,6 +26,10 @@ COLOR_LOW = (255, 0, 0)
 COLOR_IN_RANGE = (0, 128, 0)
 COLOR_NO_DATA = (0, 0, 0)
 
+# Matches static/index.html's/widget.html's lcd-blink @keyframes dim frame
+# (opacity 0.25): 0.25 * 255 rounded.
+BLINK_DIM_ALPHA = 64
+
 RangeStatus = Literal["high", "low", "in-range"]
 
 
@@ -58,6 +62,16 @@ def render_spec(
     )
 
 
+def blink_alpha(is_stale: bool, blink_on: bool) -> int:
+    """Alpha for the current blink tick - mirrors the frontend's lcd-blink toggle.
+
+    Only stale readings blink; blink_on is irrelevant otherwise.
+    """
+    if not is_stale:
+        return 255
+    return 255 if blink_on else BLINK_DIM_ALPHA
+
+
 def _status_color(status: Optional[RangeStatus]) -> tuple[int, int, int]:
     if status == "high":
         return COLOR_HIGH
@@ -68,13 +82,21 @@ def _status_color(status: Optional[RangeStatus]) -> tuple[int, int, int]:
     return COLOR_NO_DATA
 
 
-def render_icon(spec: IconRenderSpec, base_image_path, font_path) -> Image.Image:
+def render_icon(spec: IconRenderSpec, base_image_path, font_path, alpha: int = 255) -> Image.Image:
     """Draws spec.text centered on the lemon's existing LCD screen artwork.
 
     The base image already bakes in the LCD screen's rounded-rect look (from
     static/lemon.svg), so - matching how static/widget.html overlays digits
     directly on top of that same artwork with no separate background fill -
     this only draws the text, not a new background rectangle.
+
+    alpha < 255 (see blink_alpha) fades the text toward the screen artwork
+    behind it, mirroring the frontend's lcd-blink CSS opacity toggle. Text is
+    drawn onto a separate transparent overlay and composited with
+    Image.alpha_composite rather than straight onto base: ImageDraw's "RGBA"
+    mode only blends into RGB/P base images, so drawing a translucent fill
+    directly onto an already-RGBA base just overwrites those pixels' alpha
+    outright instead of blending toward what's underneath.
 
     base_image_path/font_path are taken as explicit arguments (rather than
     resolved internally) so tests can point at small fixture files instead of
@@ -88,7 +110,8 @@ def render_icon(spec: IconRenderSpec, base_image_path, font_path) -> Image.Image
     screen_w = SCREEN_WIDTH_FRACTION * width
     screen_h = SCREEN_HEIGHT_FRACTION * height
 
-    draw = ImageDraw.Draw(base)
+    overlay = Image.new("RGBA", base.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
     font_size = max(1, int(screen_h * 0.8))
     font = ImageFont.truetype(font_path, font_size)
     color = _status_color(spec.status)
@@ -99,9 +122,9 @@ def render_icon(spec: IconRenderSpec, base_image_path, font_path) -> Image.Image
     text_x = screen_x + (screen_w - text_w) / 2 - bbox[0]
     text_y = screen_y + (screen_h - text_h) / 2 - bbox[1]
 
-    draw.text((text_x, text_y), spec.text, font=font, fill=color)
+    draw.text((text_x, text_y), spec.text, font=font, fill=(*color, alpha))
 
-    return base
+    return Image.alpha_composite(base, overlay)
 
 
 def pad_to_square(image: Image.Image) -> Image.Image:

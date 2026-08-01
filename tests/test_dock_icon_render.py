@@ -4,7 +4,7 @@ import pytest
 
 pytest.importorskip("PIL")
 
-from app.dock_icon_render import IconRenderSpec, range_status, render_spec  # noqa: E402
+from app.dock_icon_render import IconRenderSpec, blink_alpha, range_status, render_spec  # noqa: E402
 
 BASE_IMAGE_PATH = Path(__file__).resolve().parent.parent / "packaging" / "lemon-icon-base.png"
 FONT_PATH = Path(__file__).resolve().parent.parent / "static" / "fonts" / "DSEG7Classic-Bold.ttf"
@@ -144,6 +144,47 @@ def test_pad_to_square_is_noop_for_already_square_image():
 
     assert squared.size == (500, 500)
     assert squared.getpixel((250, 250)) == (0, 255, 0, 255)
+
+
+def test_blink_alpha_full_when_not_stale():
+    assert blink_alpha(is_stale=False, blink_on=True) == 255
+    assert blink_alpha(is_stale=False, blink_on=False) == 255
+
+
+def test_blink_alpha_toggles_when_stale():
+    from app.dock_icon_render import BLINK_DIM_ALPHA
+
+    assert blink_alpha(is_stale=True, blink_on=True) == 255
+    assert blink_alpha(is_stale=True, blink_on=False) == BLINK_DIM_ALPHA
+
+
+def test_render_icon_dim_alpha_blends_toward_background_not_full_replace():
+    from PIL import Image
+
+    from app.dock_icon_render import BLINK_DIM_ALPHA, render_icon
+
+    base = Image.open(BASE_IMAGE_PATH).convert("RGBA")
+    spec = IconRenderSpec(text="120", status="high")
+    dim_image = render_icon(spec, BASE_IMAGE_PATH, FONT_PATH, alpha=BLINK_DIM_ALPHA)
+
+    base_pixels = list(base.getdata())
+    dim_pixels = list(dim_image.getdata())
+    # Restrict to pixels where the *background* was already fully opaque -
+    # the base artwork's own antialiased screen-corner edges are legitimately
+    # semi-transparent, so compositing over those can't reach exactly 255
+    # and isn't what this test is checking.
+    drawn_over_opaque_bg = [
+        dim_pixels[i][3]
+        for i in range(len(base_pixels))
+        if dim_pixels[i] != base_pixels[i] and base_pixels[i][3] == 255
+    ]
+
+    assert drawn_over_opaque_bg, "expected render_icon to draw something over opaque background"
+    # A plain pixel-replace bug would leave drawn pixels' own alpha at
+    # BLINK_DIM_ALPHA, punching a semi-transparent hole in the dock icon;
+    # correct RGBA blending keeps them fully opaque against the screen
+    # artwork drawn underneath.
+    assert all(alpha == 255 for alpha in drawn_over_opaque_bg)
 
 
 def test_color_high_matches_frontend_texas_orange():

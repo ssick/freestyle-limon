@@ -29,6 +29,19 @@
   #lemon-digits { font-family: 'DSEG7Classic', 'Courier New', monospace; font-weight: 700; font-size: 1.6rem; line-height: 1; }
   #lemon-digits.trend-arrow { font-family: -apple-system, system-ui, sans-serif; font-size: 2.2rem; }
   #lemon-graph { width: 100%; height: 100%; display: block; }
+  @keyframes lcd-blink {
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0.25; }
+  }
+  #lemon-digits.lcd-blink {
+    animation: lcd-blink 1s steps(1, end) infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #lemon-digits.lcd-blink {
+      animation: none;
+      opacity: 0.4;
+    }
+  }
 </style>
 </head>
 <body>
@@ -60,9 +73,11 @@
       if (lastData) {
         digitsEl.textContent = lastData.value;
         digitsEl.style.color = statusColor(lastData.is_high, lastData.is_low);
+        digitsEl.classList.toggle('lcd-blink', !!lastData.stale);
       } else {
         digitsEl.style.color = '';
         digitsEl.textContent = '--';
+        digitsEl.classList.remove('lcd-blink');
       }
     }
 
@@ -72,9 +87,11 @@
       if (lastData && lastData.trend) {
         digitsEl.textContent = lastData.trend;
         digitsEl.style.color = statusColor(lastData.is_high, lastData.is_low);
+        digitsEl.classList.toggle('lcd-blink', !!lastData.stale);
       } else {
         digitsEl.style.color = '';
         digitsEl.textContent = '--';
+        digitsEl.classList.remove('lcd-blink');
       }
     }
 

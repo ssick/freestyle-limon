@@ -47,7 +47,7 @@ coll = COLLECT(
 
 app = BUNDLE(
     coll,
-    name='freestyle-limon.app',
+    name='Freestyle Limón.app',
     icon='packaging/icon.icns',
     bundle_identifier='dev.stansick.freestyle-limon',
     info_plist={

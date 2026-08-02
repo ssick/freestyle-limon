@@ -80,8 +80,5 @@ This is a single-process FastAPI app with no database and no frontend build step
 ## Repository conventions
 
 - Development proceeds increment by increment (see commit history: "Increment N: ...").
-  Each increment's feature branch is merged into `main` via a human-approved PR before the
-  next increment starts — always branch from `main`, not from a previous increment's branch.
-- PRs are squash-merged. Don't stack a new branch on top of an unmerged one — after a squash
-  merge, the stacked branch's shared-file history diverges from `main` and produces spurious
-  "both added" conflicts on sync. Wait for the PR to merge first.
+  Each increment gets its own feature branch, merged into `main` via a human-approved PR.
+- PRs are squash-merged.

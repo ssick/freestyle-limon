@@ -47,6 +47,20 @@ This is a single-process FastAPI app with no database and no frontend build step
   `sys.executable`'s bundle location instead of `__file__`, since PyInstaller extracts the
   source into a temp dir at runtime — see the comment at the top of `app/main.py` for the
   exact path-walking logic.
+- **The packaged app must be built as `target_arch='universal2'`** (set in
+  `freestyle-limon.spec`), via `packaging/build_universal2.sh`, not by running
+  `pyinstaller` directly against the `pyenv`-managed `.venv`. `pyenv` builds a
+  single-architecture Python targeting whatever OS it was compiled on — on this repo's
+  dev machines that's arm64 with a very high deployment target, which produces a `.app`
+  that only runs on that same OS/arch. The build script uses a separate python.org
+  universal2 Python instead. `Pillow` and `pydantic_core` don't publish universal2 wheels
+  on PyPI (only separate arm64/x86_64 ones), so the script merges them with
+  `delocate-merge` before running PyInstaller — see the script's comments for the exact
+  mechanism, and its `THIN_PACKAGES` list if a future dependency bump introduces another
+  one (PyInstaller's `IncompatibleBinaryArchError` names the offending file when this
+  happens). `LSMinimumSystemVersion` in the spec is `10.13` — the practical floor of the
+  entire current Python/PyInstaller/pyobjc packaging ecosystem, confirmed by checking the
+  actual PyPI wheel tags and PyInstaller's bootloader default, not an arbitrary choice.
 
 ## Testing conventions
 

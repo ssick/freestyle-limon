@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import sys
 from contextlib import asynccontextmanager
@@ -7,10 +8,10 @@ from typing import Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from app import state
+from app import broadcast, state
 from app.libre_client import build_client, fetch_reading_and_history
 
 # When frozen into a standalone executable, __file__ resolves inside the
@@ -72,6 +73,7 @@ async def fetch_loop() -> None:
         except Exception as exc:
             logger.exception("Failed to fetch glucose reading")
             state.set_error(str(exc))
+        await broadcast.publish(_build_latest_payload())
         await asyncio.sleep(FETCH_INTERVAL_SECONDS)
 
 
@@ -86,8 +88,7 @@ app = FastAPI(lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
-@app.get("/api/latest")
-async def get_latest():
+def _build_latest_payload() -> dict:
     reading = state.get_latest()
     if reading is None:
         return {"status": "pending", "error": state.get_error()}
@@ -112,6 +113,26 @@ async def get_latest():
             for point in state.get_history()
         ],
     }
+
+
+@app.get("/api/latest")
+async def get_latest():
+    return _build_latest_payload()
+
+
+@app.get("/api/stream")
+async def stream():
+    async def event_generator():
+        queue = broadcast.subscribe()
+        try:
+            yield f"data: {json.dumps(_build_latest_payload())}\n\n"
+            while True:
+                payload = await queue.get()
+                yield f"data: {json.dumps(payload)}\n\n"
+        finally:
+            broadcast.unsubscribe(queue)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @app.get("/")

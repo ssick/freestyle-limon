@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Settings</title>
+<style>
+  body {
+    font-family: sans-serif;
+    margin: 0;
+    background: #FFFDF3;
+    color: #5C4A00;
+  }
+  header {
+    background: linear-gradient(180deg, #F9E27A, #F4D03F);
+    padding: 1rem 1.5rem;
+    margin-bottom: 1.5rem;
+    border-radius: 0 0 16px 16px;
+  }
+  header h1 { margin: 0; font-size: 1.25rem; }
+  form { padding: 0 1.5rem; }
+  label { display: block; font-size: 0.85rem; margin-bottom: 0.25rem; }
+  input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.5rem;
+    margin-bottom: 1rem;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 0.95rem;
+  }
+  button {
+    background: #F4D03F;
+    color: #5C4A00;
+    border: none;
+    border-radius: 6px;
+    padding: 0.6rem 1.25rem;
+    font-size: 0.95rem;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.6; cursor: default; }
+  #status { margin-top: 1rem; font-size: 0.85rem; min-height: 1.2em; }
+  #status.error { color: red; }
+  #status.ok { color: green; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>LibreLinkUp Settings</h1>
+  </header>
+  <form id="settings-form">
+    <label for="email">Email</label>
+    <input type="email" id="email" autocomplete="username" required>
+
+    <label for="password">Password</label>
+    <input type="password" id="password" autocomplete="current-password">
+
+    <button type="submit" id="save-button">Save</button>
+    <div id="status"></div>
+  </form>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const emailEl = document.getElementById('email');
+    const passwordEl = document.getElementById('password');
+    const saveButton = document.getElementById('save-button');
+
+    function setStatus(text, kind) {
+      statusEl.textContent = text;
+      statusEl.className = kind ?? '';
+    }
+
+    async function loadCredentials() {
+      const data = await window.pywebview.api.get_credentials();
+      emailEl.value = data.email;
+      passwordEl.placeholder = data.has_password ? 'Leave blank to keep current password' : '';
+    }
+
+    async function pollForResult() {
+      const maxAttempts = 8;
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, 2500));
+        const error = await window.pywebview.api.get_last_error();
+        if (error === null) {
+          setStatus('Connected.', 'ok');
+          return;
+        }
+        setStatus(error, 'error');
+      }
+    }
+
+    async function handleSubmit(event) {
+      event.preventDefault();
+      saveButton.disabled = true;
+      setStatus('Saving…');
+      try {
+        await window.pywebview.api.save_credentials(emailEl.value, passwordEl.value);
+        passwordEl.value = '';
+        setStatus('Saved. Checking connection…');
+        await pollForResult();
+      } catch (err) {
+        setStatus('Failed to save: ' + err, 'error');
+      } finally {
+        saveButton.disabled = false;
+      }
+    }
+
+    window.addEventListener('pywebviewready', () => {
+      loadCredentials();
+      document.getElementById('settings-form').addEventListener('submit', handleSubmit);
+    });
+  </script>
+</body>
+</html>

@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app import state
+from app import credentials, state
 from app.libre_client import build_client, fetch_reading_and_history
 
 # When frozen into a standalone executable, __file__ resolves inside the
@@ -29,6 +29,7 @@ if getattr(sys, "frozen", False):
 else:
     APP_DIR = Path(__file__).resolve().parent.parent
 
+credentials.load()
 load_dotenv(APP_DIR / ".env")
 
 logger = logging.getLogger("freestyle_limon")
@@ -50,8 +51,13 @@ def is_stale_reading(current_timestamp: Optional[str], previous_timestamp: Optio
 async def fetch_loop() -> None:
     client = None
     patient = None
+    last_seen_generation = credentials.get_generation()
     while True:
         try:
+            if credentials.get_generation() != last_seen_generation:
+                client = None
+                patient = None
+                last_seen_generation = credentials.get_generation()
             if client is None:
                 client, patient = await asyncio.to_thread(build_client)
             previous_reading = state.get_latest()

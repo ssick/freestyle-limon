@@ -1,5 +1,6 @@
 """Entry point for the standalone macOS app (see `pyinstaller` build in README)."""
 import io
+import os
 import socket
 import sys
 import threading
@@ -11,7 +12,7 @@ import uvicorn
 import webview
 from PyObjCTools import AppHelper
 
-from app import state
+from app import credentials, state
 from app.dock_icon_render import blink_alpha, pad_to_square, render_icon, render_spec
 from app.main import app
 
@@ -20,6 +21,9 @@ HOST = "127.0.0.1"
 WIDGET_WIDTH = 180
 WIDGET_HEIGHT = 180
 WIDGET_MARGIN = 24
+
+SETTINGS_WIDTH = 420
+SETTINGS_HEIGHT = 320
 
 DOCK_ICON_UPDATE_INTERVAL_SECONDS = 45
 # Matches static/index.html's/widget.html's RETRY_INTERVAL_MS: poll fast until
@@ -135,6 +139,45 @@ class WidgetApi:
             return WIDGET_MARGIN, WIDGET_MARGIN
 
 
+class SettingsApi:
+    """Exposed to the settings page as `window.pywebview.api`."""
+
+    def __init__(self, base_url: str) -> None:
+        self._base_url = base_url
+        self.settings_window: webview.Window | None = None
+
+    def open(self) -> None:
+        """Open the settings window, or bring it to the front if already open."""
+        if self.settings_window is not None:
+            self.settings_window.show()
+            return
+        self.settings_window = webview.create_window(
+            "Settings",
+            f"{self._base_url}/static/settings.html",
+            width=SETTINGS_WIDTH,
+            height=SETTINGS_HEIGHT,
+            resizable=False,
+            js_api=self,
+        )
+        self.settings_window.events.closed += self._on_settings_closed
+
+    def _on_settings_closed(self) -> None:
+        self.settings_window = None
+
+    def get_credentials(self) -> dict:
+        return {
+            "email": os.environ.get("LIBRE_EMAIL", ""),
+            "has_password": bool(os.environ.get("LIBRE_PASSWORD")),
+        }
+
+    def save_credentials(self, email: str, password: str) -> dict:
+        credentials.save(email, password or None)
+        return {"ok": True}
+
+    def get_last_error(self) -> str | None:
+        return state.get_error()
+
+
 if __name__ == "__main__":
     # Bind to a random free port instead of a fixed one, so the app doesn't
     # clash with anything else already listening on a well-known port.
@@ -155,4 +198,7 @@ if __name__ == "__main__":
         js_api=widget_api,
     )
     _update_dock_icon()
-    webview.start(gui="cocoa")
+
+    settings_api = SettingsApi(base_url)
+    settings_menu = webview.Menu('__app__', [webview.menu.MenuAction('Settings…', settings_api.open)])
+    webview.start(gui="cocoa", menu=[settings_menu])

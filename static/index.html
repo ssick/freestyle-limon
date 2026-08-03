@@ -210,54 +210,46 @@
       svg.addEventListener('touchend', hide);
     }
 
-    let hasReading = false;
-    const POLL_INTERVAL_MS = 30000;
-    const RETRY_INTERVAL_MS = 2000;
+    function handleUpdate(data) {
+      if (data.status === 'ok') {
+        const color = statusColor(data.is_high, data.is_low);
 
-    async function poll() {
-      try {
-        const res = await fetch('/api/latest');
-        const data = await res.json();
+        const valueEl = document.getElementById('value');
+        valueEl.textContent = `${data.value} mg/dL ${data.trend ?? ''}`;
+        valueEl.style.color = data.stale ? '#999' : color;
 
-        if (data.status === 'ok') {
-          hasReading = true;
-          const color = statusColor(data.is_high, data.is_low);
+        const digitsEl = document.getElementById('lemon-digits');
+        digitsEl.textContent = data.value;
+        digitsEl.style.color = color;
+        digitsEl.classList.toggle('lcd-blink', !!data.stale);
 
-          const valueEl = document.getElementById('value');
-          valueEl.textContent = `${data.value} mg/dL ${data.trend ?? ''}`;
-          valueEl.style.color = data.stale ? '#999' : color;
+        document.getElementById('timestamp').textContent = data.timestamp
+          ? `measured at ${new Date(data.timestamp).toLocaleTimeString()}`
+          : '';
+        document.title = `${data.value} mg/dL · Freestyle Limón`;
 
-          const digitsEl = document.getElementById('lemon-digits');
-          digitsEl.textContent = data.value;
-          digitsEl.style.color = color;
-          digitsEl.classList.toggle('lcd-blink', !!data.stale);
-
-          document.getElementById('timestamp').textContent = data.timestamp
-            ? `measured at ${new Date(data.timestamp).toLocaleTimeString()}`
-            : '';
-          document.title = `${data.value} mg/dL · Freestyle Limón`;
-
-          let historyForChart = data.history ?? [];
-          const lastPoint = historyForChart[historyForChart.length - 1];
-          if (data.timestamp && (!lastPoint?.timestamp || new Date(data.timestamp) > new Date(lastPoint.timestamp))) {
-            historyForChart = [...historyForChart, {
-              value: data.value,
-              timestamp: data.timestamp,
-              is_high: data.is_high,
-              is_low: data.is_low,
-            }];
-          }
-          renderHistory(historyForChart, data.target_low, data.target_high);
-        } else if (data.error) {
-          const valueEl = document.getElementById('value');
-          valueEl.textContent = data.error;
-          valueEl.style.color = 'red';
+        let historyForChart = data.history ?? [];
+        const lastPoint = historyForChart[historyForChart.length - 1];
+        if (data.timestamp && (!lastPoint?.timestamp || new Date(data.timestamp) > new Date(lastPoint.timestamp))) {
+          historyForChart = [...historyForChart, {
+            value: data.value,
+            timestamp: data.timestamp,
+            is_high: data.is_high,
+            is_low: data.is_low,
+          }];
         }
-      } catch (err) {
-        console.error('Failed to poll /api/latest', err);
-      } finally {
-        setTimeout(poll, hasReading ? POLL_INTERVAL_MS : RETRY_INTERVAL_MS);
+        renderHistory(historyForChart, data.target_low, data.target_high);
+      } else if (data.error) {
+        const valueEl = document.getElementById('value');
+        valueEl.textContent = data.error;
+        valueEl.style.color = 'red';
       }
+    }
+
+    function connectStream() {
+      const source = new EventSource('/api/stream');
+      source.onmessage = e => handleUpdate(JSON.parse(e.data));
+      source.onerror = err => console.error('/api/stream connection error', err);
     }
 
     function setupWidgetToggle() {
@@ -274,7 +266,7 @@
 
     setupChartHover();
     setupWidgetToggle();
-    poll();
+    connectStream();
   </script>
 </body>
 </html>

@@ -1,4 +1,5 @@
 """Entry point for the standalone macOS app (see `pyinstaller` build in README)."""
+import asyncio
 import io
 import os
 import socket
@@ -12,7 +13,7 @@ import uvicorn
 import webview
 from PyObjCTools import AppHelper
 
-from app import credentials, state
+from app import broadcast, credentials, state
 from app.dock_icon_render import blink_alpha, pad_to_square, render_icon, render_spec
 from app.main import app
 
@@ -31,11 +32,13 @@ DOCK_ICON_UPDATE_INTERVAL_SECONDS = 45
 DOCK_ICON_RETRY_INTERVAL_SECONDS = 2
 # Matches static/index.html's/widget.html's lcd-blink @keyframes half-cycle
 # (1s animation, two phases): ticking the icon this often is what makes it
-# visibly blink while stale.
+# visibly blink while stale. Data updates are push-driven (see
+# _dock_icon_subscriber_loop below), but blinking is a fixed-cadence local
+# animation independent of when new data arrives, so it stays timer-driven.
 DOCK_ICON_BLINK_INTERVAL_SECONDS = 0.5
 
-_dock_icon_has_reading = False
 _dock_icon_blink_on = True
+_dock_icon_blink_loop_active = False
 
 # Bundled data files (datas=[...] in freestyle-limon.spec) land in
 # Contents/Resources/ in a PyInstaller macOS app bundle, not next to the
@@ -51,8 +54,9 @@ DOCK_ICON_BASE_IMAGE_PATH = ASSETS_DIR / "packaging" / "lemon-icon-base.png"
 DOCK_ICON_FONT_PATH = ASSETS_DIR / "static" / "fonts" / "DSEG7Classic-Bold.ttf"
 
 
-def _update_dock_icon() -> None:
-    global _dock_icon_has_reading, _dock_icon_blink_on
+def _render_dock_icon() -> None:
+    """Render the Dock icon from current state. Must run on the Cocoa main thread."""
+    global _dock_icon_blink_on, _dock_icon_blink_loop_active
 
     reading = state.get_latest()
     target_low, target_high = state.get_target_range()
@@ -62,8 +66,6 @@ def _update_dock_icon() -> None:
         target_high,
         state.get_error(),
     )
-    if reading is not None:
-        _dock_icon_has_reading = True
 
     is_stale = state.get_is_stale()
     _dock_icon_blink_on = (not _dock_icon_blink_on) if is_stale else True
@@ -76,16 +78,38 @@ def _update_dock_icon() -> None:
     ns_image = AppKit.NSImage.alloc().initWithData_(ns_data)
     AppKit.NSApplication.sharedApplication().setApplicationIconImage_(ns_image)
 
-    if is_stale:
-        interval = DOCK_ICON_BLINK_INTERVAL_SECONDS
-    else:
-        interval = DOCK_ICON_UPDATE_INTERVAL_SECONDS if _dock_icon_has_reading else DOCK_ICON_RETRY_INTERVAL_SECONDS
-    AppHelper.callLater(interval, _update_dock_icon)
+    if is_stale and not _dock_icon_blink_loop_active:
+        _dock_icon_blink_loop_active = True
+        AppHelper.callLater(DOCK_ICON_BLINK_INTERVAL_SECONDS, _dock_icon_blink_tick)
 
 
-def _run_server(sock: socket.socket) -> None:
-    config = uvicorn.Config(app, host=HOST, log_level="warning")
-    uvicorn.Server(config).run(sockets=[sock])
+def _dock_icon_blink_tick() -> None:
+    """Keep re-rendering at the toggled alpha while stale; self-terminates once fresh."""
+    global _dock_icon_blink_loop_active
+    if not state.get_is_stale():
+        _dock_icon_blink_loop_active = False
+        return
+    _render_dock_icon()
+    AppHelper.callLater(DOCK_ICON_BLINK_INTERVAL_SECONDS, _dock_icon_blink_tick)
+
+
+async def _dock_icon_subscriber_loop() -> None:
+    """Runs on the server's event loop; marshals each broadcast onto the Cocoa main thread."""
+    queue = broadcast.subscribe()
+    AppHelper.callAfter(_render_dock_icon)
+    while True:
+        await queue.get()
+        AppHelper.callAfter(_render_dock_icon)
+
+
+def _run_server(sock: socket.socket, loop_ready: threading.Event, loop_box: list) -> None:
+    async def main() -> None:
+        loop_box.append(asyncio.get_running_loop())
+        loop_ready.set()
+        config = uvicorn.Config(app, host=HOST, log_level="warning")
+        await uvicorn.Server(config).serve(sockets=[sock])
+
+    asyncio.run(main())
 
 
 class WidgetApi:
@@ -186,7 +210,14 @@ if __name__ == "__main__":
     port = sock.getsockname()[1]
     sock.listen()
 
-    threading.Thread(target=_run_server, args=(sock,), daemon=True).start()
+    server_loop_ready = threading.Event()
+    server_loop_box: list = []
+    threading.Thread(
+        target=_run_server, args=(sock, server_loop_ready, server_loop_box), daemon=True
+    ).start()
+    server_loop_ready.wait()
+    asyncio.run_coroutine_threadsafe(_dock_icon_subscriber_loop(), server_loop_box[0])
+
     base_url = f"http://{HOST}:{port}"
     widget_api = WidgetApi(base_url)
     webview.create_window(

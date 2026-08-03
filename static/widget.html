@@ -170,28 +170,20 @@
       render();
     }
 
-    let hasReading = false;
-    const POLL_INTERVAL_MS = 30000;
-    const RETRY_INTERVAL_MS = 2000;
-
-    async function poll() {
-      try {
-        const res = await fetch('/api/latest');
-        const data = await res.json();
+    function connectStream() {
+      const source = new EventSource('/api/stream');
+      source.onmessage = e => {
+        const data = JSON.parse(e.data);
         if (data.status === 'ok') {
-          hasReading = true;
           lastData = data;
         }
         render();
-      } catch (err) {
-        console.error('Failed to poll /api/latest', err);
-      } finally {
-        setTimeout(poll, hasReading ? POLL_INTERVAL_MS : RETRY_INTERVAL_MS);
-      }
+      };
+      source.onerror = err => console.error('/api/stream connection error', err);
     }
 
     document.getElementById('lemon-screen').addEventListener('click', cycleView);
-    poll();
+    connectStream();
   </script>
 </body>
 </html>

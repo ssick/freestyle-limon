@@ -15,9 +15,18 @@ the standalone macOS app.
 This is a single-process FastAPI app with no database and no frontend build step.
 
 - **`app/main.py`** — FastAPI app. A background `fetch_loop()` task (started in `lifespan`)
-  polls LibreLinkUp every `FETCH_INTERVAL_SECONDS` (60s) and writes results into `app/state.py`.
-  The single `GET /api/latest` endpoint just reads that state back out — it never calls
-  LibreLinkUp itself. `GET /` and `/static/*` serve the frontend.
+  polls LibreLinkUp every `FETCH_INTERVAL_SECONDS` (60s), writes results into `app/state.py`,
+  and publishes the same payload via `app/broadcast.py` after every fetch (success or error).
+  `GET /api/latest` reads state back out — it never calls LibreLinkUp itself. `GET /api/stream`
+  (Server-Sent Events) pushes that same payload to any number of subscribers the instant
+  `fetch_loop` publishes it, plus an immediate on-connect snapshot so a newly-opened
+  subscriber isn't blank until the next fetch. Both endpoints share one payload-building
+  function, `_build_latest_payload()`, so they can't drift apart. `GET /` and `/static/*` serve
+  the frontend.
+- **`app/broadcast.py`** — in-memory pub/sub (`set[asyncio.Queue]`) backing `/api/stream`. No
+  locking, which is safe only because the app is always single-process/single-uvicorn-worker
+  (dev `--reload`, or embedded in `run.py`) — if that ever changes, this needs a cross-process
+  broker (e.g. Redis pub/sub) instead of an in-memory set.
 - **`app/state.py`** — process-global in-memory state (module-level variables, not a class/DB).
   Holds the latest reading, recent history, the patient's target range, and the last fetch
   error. Single-patient only: there's no concept of multiple users or sessions.
@@ -35,7 +44,9 @@ This is a single-process FastAPI app with no database and no frontend build step
   build step. Both pages independently poll `/api/latest` every 30s (falling back to a 2s
   retry until the first successful reading) and render client-side. The history chart in
   `index.html` is hand-rolled SVG (scales, hover/tooltip, threshold lines) rather than a
-  charting library.
+  charting library. `GET /api/stream` exists but isn't consumed yet — neither page nor the
+  Dock icon (`run.py`) has been switched to `EventSource`; that's a planned follow-up
+  increment to close the sync gap between windows described in the `app/main.py` bullet above.
 - **`run.py`** is a separate entry point (not used by `uvicorn --reload`) for the packaged
   desktop app: it runs the same FastAPI `app` via `uvicorn` in a background thread inside a
   `pywebview` window, and exposes a `WidgetApi` as `window.pywebview.api` so the page can
@@ -56,12 +67,18 @@ This is a single-process FastAPI app with no database and no frontend build step
 - `tests/test_libre_client.py` fakes the `pylibrelinkup` client with a minimal
   `SimpleNamespace`-based `FakeClient` rather than mocking the library — follow this pattern
   for new LibreLinkUp-response-shaped tests.
+- **SSE/streaming endpoints can't be tested through a real request via `TestClient`.**
+  `httpx`'s `ASGITransport` (which `TestClient` uses) always runs the ASGI app to completion
+  and buffers the full response body before returning anything — so a request to an endpoint
+  that streams forever by design (like `/api/stream`) hangs the test forever, no matter which
+  client method or timeout you use. Instead, `await` the route function directly and drive its
+  `StreamingResponse.body_iterator` manually with `__anext__()`/`aclose()` — see
+  `test_stream_sends_initial_snapshot_then_cleans_up_on_close` in `tests/test_api.py`. Also
+  note the generator is lazy: code before the first `body_iterator` item (e.g.
+  `broadcast.subscribe()`) hasn't run yet right after calling the route function.
 
 ## Repository conventions
 
 - Development proceeds increment by increment (see commit history: "Increment N: ...").
-  Each increment's feature branch is merged into `main` via a human-approved PR before the
-  next increment starts — always branch from `main`, not from a previous increment's branch.
-- PRs are squash-merged. Don't stack a new branch on top of an unmerged one — after a squash
-  merge, the stacked branch's shared-file history diverges from `main` and produces spurious
-  "both added" conflicts on sync. Wait for the PR to merge first.
+  Each increment gets its own feature branch, merged into `main` via a human-approved PR.
+- PRs are squash-merged.

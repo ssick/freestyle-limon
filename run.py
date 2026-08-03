@@ -228,7 +228,6 @@ if __name__ == "__main__":
         min_size=(360, 600),
         js_api=widget_api,
     )
-    _update_dock_icon()
 
     settings_api = SettingsApi(base_url)
     settings_menu = webview.Menu('__app__', [webview.menu.MenuAction('Settings…', settings_api.open)])

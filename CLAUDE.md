@@ -58,6 +58,15 @@ This is a single-process FastAPI app with no database and no frontend build step
   `sys.executable`'s bundle location instead of `__file__`, since PyInstaller extracts the
   source into a temp dir at runtime — see the comment at the top of `app/main.py` for the
   exact path-walking logic.
+- **Always build the packaged app with `packaging/build.sh`, never `pyinstaller
+  freestyle-limon.spec` directly.** PyInstaller keeps a cache at `~/Library/Application
+  Support/pyinstaller/` that's shared across every PyInstaller project on the machine, not
+  just this repo. A build using a stale copy of it can report success while silently
+  omitting code that's correctly present in the source tree (observed: a native menu item
+  present in source, correctly bundled in the frozen app's own bytecode, but still absent
+  from the app's actual menu bar at runtime). `packaging/build.sh` always passes
+  `--clean`, which purges that cache before building — this is the only reliable way to
+  guarantee a build reflects the current source tree.
 
 ## Testing conventions
 

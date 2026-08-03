@@ -198,8 +198,8 @@ class SettingsApi:
         credentials.save(email, password or None)
         return {"ok": True}
 
-    def get_last_error(self) -> str | None:
-        return state.get_error()
+    def get_connection_status(self) -> dict:
+        return credentials.connection_status()
 
 
 if __name__ == "__main__":

@@ -77,16 +77,21 @@
     }
 
     async function pollForResult() {
-      const maxAttempts = 8;
+      const maxAttempts = 15;
       for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        await new Promise(resolve => setTimeout(resolve, 2500));
-        const error = await window.pywebview.api.get_last_error();
-        if (error === null) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        const result = await window.pywebview.api.get_connection_status();
+        if (result.status === 'ok') {
           setStatus('Connected.', 'ok');
           return;
         }
-        setStatus(error, 'error');
+        if (result.status === 'error') {
+          setStatus(result.error, 'error');
+          return;
+        }
+        // 'pending': the app hasn't retried with the new credentials yet, keep waiting.
       }
+      setStatus('Still checking connection — this can take up to a minute.', 'error');
     }
 
     async function handleSubmit(event) {

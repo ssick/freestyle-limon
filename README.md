@@ -49,17 +49,20 @@ For running without a Python install, build a native `.app`:
 ./packaging/build.sh
 ```
 
-This produces `dist/Freestyle Limón.app`. Always build with this script rather than
-running `pyinstaller freestyle-limon.spec` directly — PyInstaller keeps a cache at
-`~/Library/Application Support/pyinstaller/` that's shared across every PyInstaller
-project on the machine, not just this repo, and a build using a stale copy of it can
-report success while silently omitting code (e.g. a native menu item that's correctly
-present in the source but missing from the built app). The script always passes
-`--clean`, which purges that cache (and the local `build/` one) before building, so the
-result is guaranteed to reflect the current source tree.
+This produces `dist/Freestyle Limón.app`. The script builds with `--clean` (so no
+leftover PyInstaller state from an earlier build can influence the result) and then
+warns if any *other* copy of the app is installed elsewhere — see the caution below.
+
+> **Only keep one copy of the app installed.** macOS resolves applications by their
+> bundle identifier, not by path. If a second bundle with the same identifier exists
+> anywhere (say, an older build sitting in `/Applications`), double-clicking your
+> freshly-built `.app` can silently launch the *other* one instead — so a rebuild
+> appears to change nothing, and features that are demonstrably present in the new
+> binary seem to be missing. If you keep a copy in `/Applications`, replace it after
+> every rebuild rather than running the two side by side.
 
 To use the built app:
 
-1. Copy `dist/Freestyle Limón.app` to wherever you want to run it from (e.g. `/Applications`).
+1. Copy `dist/Freestyle Limón.app` to wherever you want to run it from (e.g. `/Applications`) — replacing any previous copy, per the caution above.
 2. Double-click it. It opens as a normal Mac app — no Terminal window, no browser tab — showing the dashboard in its own window. Quit via the window's close button or Cmd+Q.
 3. On first launch, open its **Freestyle Limón → Settings…** menu to enter your `LIBRE_EMAIL` / `LIBRE_PASSWORD` — no `.env` file needed. (A `.env` placed next to the `.app`, the old setup method, still works as a fallback if you already have one.)

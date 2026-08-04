@@ -61,16 +61,30 @@ This is a single-process FastAPI app with no database and no frontend build step
 - **Build the packaged app with `packaging/build.sh`.** It builds with `--clean` (so no
   leftover PyInstaller state from an earlier build can influence the result) and then
   warns if other bundles sharing this app's identifier are installed elsewhere.
-- **Duplicate app bundles are a debugging trap.** macOS LaunchServices resolves apps by
-  `CFBundleIdentifier`, not by path. If two bundles share this app's identifier
-  (`dev.stansick.freestyle-limon`), double-clicking one can launch the other — so a
-  rebuild appears to have no effect, and a feature verifiably present in the new binary
-  appears to be missing at runtime. This cost a long debugging session: an old copy in
-  `/Applications` kept being launched instead of freshly-built `dist/` copies, while every
-  check run against `dist/` (including extracting and disassembling its bundled bytecode)
-  correctly showed the feature present — making the reports look contradictory. When a
-  built app's runtime behavior contradicts its own verified contents, check *which binary
-  is actually running* (`ps aux | grep freestyle`) before suspecting the build.
+- **Every build gets its own `CFBundleIdentifier`** (`dev.stansick.freestyle-limon.<rev-count>-<sha>`),
+  derived in `build.sh` and read by the spec from `FL_BUNDLE_ID`. This is not cosmetic — it
+  fixes a real failure mode described next.
+- **Shared bundle identifiers hijack *activation*, not launch.** Double-clicking a bundle
+  always launches *that* bundle — the binary is never substituted. But macOS resolves an
+  app's *identity* (Dock tile, activation, which window comes forward) by
+  `CFBundleIdentifier`. With two bundles sharing one identifier, double-clicking the new
+  build correctly starts the new process while raising the **old** build's window. You then
+  photograph the old UI and conclude the rebuild did nothing, even though the new binary is
+  running fine in the background. Measured directly: with an old shared-identifier copy
+  running, Finder-launching `dist/` left `lsappinfo front` pointing at the *old* bundle;
+  after the per-build identifier landed, the identical test pointed at `dist/`. Both
+  processes coexist in both cases — only focus differs.
+- **This is why the symptom is nearly impossible to reproduce on demand.** It requires
+  another copy to be running, so any clean-slate attempt succeeds and looks like the bug
+  vanished. Don't conclude "not reproducible" means "not real". `ps aux | grep freestyle`
+  plus `lsappinfo front` settles it in one step.
+- **`mdfind` cannot find duplicate bundles; use `lsregister`.** Spotlight never indexes
+  dot-directories, so builds under `.claude/worktrees/*/dist` were invisible to the old
+  `mdfind`-based guard in `build.sh` while remaining fully visible to LaunchServices (which
+  descends into invisible directories). The guard printed "none found" precisely when it
+  mattered. It now parses `lsregister -dump`, which immediately surfaced bundles the old
+  check never saw — including one on an unmounted volume (`/Volumes/stan`). Related trap:
+  grep those paths case-insensitively, since the bundle is named `Freestyle Limón.app`.
 
 ## Testing conventions
 

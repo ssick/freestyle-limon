@@ -72,10 +72,20 @@ This is a single-process FastAPI app with no database and no frontend build step
     real build, `freestyle-limon` is a worktree copy. The window title is set by pywebview
     and looks identical either way, so it proves nothing. Confirm with
     `ps -o command= -p <pid>`.
-  - **`CFBundleVersion` does not break the tie** when one side omits it. Apple's rule
-    prefers the higher version, but with nothing to compare it falls through to what Apple
-    documents as choosing "in an unspecified manner", which here reliably picked the
-    worktree copy even though `dist/` had `CFBundleVersion=21`.
+  - **`CFBundleVersion` is what decides the winner, and it is load-bearing.** Measured with
+    two bundles sharing the identifier and differing only in version (21 vs 10):
+    double-clicking *either* one launched the **higher-versioned** bundle, confirmed via
+    the About panel and `CFBundleName` in the menu bar. Apple's documented "prefer the
+    latest `CFBundleVersion`" rule does apply to launching an app, not only to opening
+    documents.
+  - **A missing `CFBundleVersion` is not treated as "lowest" — it breaks the rule.** The
+    worktree bundle had none at all, so even against `dist/` at version 21 it still won:
+    with one side absent there is nothing to compare and macOS falls through to what its
+    own docs call choosing "in an unspecified manner". So the shared identifier was
+    necessary but not sufficient; the absent version is what let the wrong binary win.
+    **Never ship a build without `CFBundleVersion`** — `build.sh` sets it from
+    `git rev-list --count HEAD`. This is also what protects end users who keep an old copy
+    alongside a new one: double-clicking either runs the newest installed build.
   - **`lsregister -u` does not hold.** Launching an app re-registers it, so unregistering a
     competing bundle is undone the moment anything starts it. The stale bundle has to stop
     being an `.app` — delete it, or rename it to `.app.disabled`.

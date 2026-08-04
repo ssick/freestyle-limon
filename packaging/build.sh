@@ -22,20 +22,27 @@ BUNDLE_ID_PREFIX="dev.stansick.freestyle-limon"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-# Every release gets its own bundle identifier, suffixed with the commit it was
-# built from. macOS resolves an app's identity - Dock tile, activation, which
-# window comes forward - by CFBundleIdentifier, not by path. Two bundles sharing
-# one identifier are therefore two processes claiming to be the same app, and a
-# stale copy can surface in place of the one you just built. Suffixing per commit
-# makes each build a distinct app to macOS, so old and new coexist unambiguously.
+# The identifier varies by *where* the app is built, and is otherwise stable.
 #
-# The suffix is derived from the commit rather than the wall clock so that
-# rebuilding the same commit reproduces the same identifier.
+# macOS resolves an app's identity - Dock tile, activation, which window comes
+# forward - by CFBundleIdentifier, not by path. Two bundles sharing one
+# identifier are two processes claiming to be the same app, so a stale copy in a
+# worktree can steal focus from the build you just made: the new process starts
+# correctly while the old one's window is raised. Giving worktree builds their
+# own identifier stops that.
+#
+# It deliberately does NOT vary per build or per commit. A bundle identifier
+# macOS has never seen before is refused on its first Finder launch (the bare
+# "can't be opened" dialog from CoreServicesUIAgent) while `open` from a shell
+# still works - so a per-build identifier would demand a fresh approval after
+# every single build. Few stable identifiers, approved once, is the workable
+# shape; per-build identity is not.
 VERSION="0.1.0"
 BUILD="$(git rev-list --count HEAD)"
-SHA="$(git rev-parse --short HEAD)"
-git diff --quiet HEAD 2>/dev/null || SHA="${SHA}-dirty"
-BUNDLE_ID="${BUNDLE_ID_PREFIX}.${BUILD}-${SHA}"
+BUNDLE_ID="$BUNDLE_ID_PREFIX"
+if [ "$(git rev-parse --git-dir)" != "$(git rev-parse --git-common-dir)" ]; then
+  BUNDLE_ID="${BUNDLE_ID_PREFIX}.worktree"
+fi
 
 export FL_BUNDLE_ID="$BUNDLE_ID"
 export FL_VERSION="$VERSION"
@@ -50,8 +57,21 @@ pip install -q -r requirements-build.txt
 echo "==> Running PyInstaller"
 pyinstaller --clean -y freestyle-limon.spec
 
-echo "==> Checking for other copies of this app"
 built_app="$REPO_ROOT/dist/Freestyle Limón.app"
+
+LSREG=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+
+# PyInstaller builds with --clean, which deletes and recreates the .app rather
+# than updating it in place. A Finder window left open on dist/ (or any cached
+# LaunchServices record) then refers to a directory that no longer exists, and
+# double-clicking the app can fail with a bare "cannot be opened" while
+# `open dist/...` from a shell - which resolves the path afresh - still works.
+# Registering the new bundle explicitly makes LaunchServices point at what was
+# actually just built.
+echo "==> Registering the new bundle with LaunchServices"
+"$LSREG" -f "$built_app"
+
+echo "==> Checking for other copies of this app"
 
 # Queried via lsregister, not mdfind. mdfind reads the Spotlight index, which
 # never covers dot-directories - so a build sitting in .claude/worktrees/*/dist
@@ -59,8 +79,7 @@ built_app="$REPO_ROOT/dist/Freestyle Limón.app"
 # (lsregister descends into invisible directories). That false all-clear let a
 # stale bundle sit around unnoticed. lsregister is the database macOS actually
 # resolves against, so ask that one.
-LSREG=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
-
+#
 # Within an lsregister record the path line precedes the identifier line, so
 # carry the most recent path forward and emit it when the identifier matches.
 others=()

@@ -61,23 +61,35 @@ This is a single-process FastAPI app with no database and no frontend build step
 - **Build the packaged app with `packaging/build.sh`.** It builds with `--clean` (so no
   leftover PyInstaller state from an earlier build can influence the result) and then
   warns if other bundles sharing this app's identifier are installed elsewhere.
-- **Every build gets its own `CFBundleIdentifier`** (`dev.stansick.freestyle-limon.<rev-count>-<sha>`),
-  derived in `build.sh` and read by the spec from `FL_BUNDLE_ID`. This is not cosmetic — it
-  fixes a real failure mode described next.
-- **Shared bundle identifiers hijack *activation*, not launch.** Double-clicking a bundle
-  always launches *that* bundle — the binary is never substituted. But macOS resolves an
-  app's *identity* (Dock tile, activation, which window comes forward) by
-  `CFBundleIdentifier`. With two bundles sharing one identifier, double-clicking the new
-  build correctly starts the new process while raising the **old** build's window. You then
-  photograph the old UI and conclude the rebuild did nothing, even though the new binary is
-  running fine in the background. Measured directly: with an old shared-identifier copy
-  running, Finder-launching `dist/` left `lsappinfo front` pointing at the *old* bundle;
-  after the per-build identifier landed, the identical test pointed at `dist/`. Both
-  processes coexist in both cases — only focus differs.
-- **This is why the symptom is nearly impossible to reproduce on demand.** It requires
-  another copy to be running, so any clean-slate attempt succeeds and looks like the bug
-  vanished. Don't conclude "not reproducible" means "not real". `ps aux | grep freestyle`
-  plus `lsappinfo front` settles it in one step.
+- **A shared `CFBundleIdentifier` makes Finder launch the WRONG BINARY.** Not the wrong
+  window, not the wrong focus — a genuinely different executable. Double-clicking
+  `dist/Freestyle Limón.app` started
+  `.claude/worktrees/agent-*/dist/freestyle-limon.app` instead, and only that one process
+  ran; the double-clicked bundle never started at all. `open <path>` from a shell always
+  gets it right, because an explicit path bypasses identifier resolution. That asymmetry —
+  Finder wrong, terminal right, same bundle — is the signature of this bug.
+  - **The giveaway is the menu bar**, which shows `CFBundleName`: `Freestyle Limón` is the
+    real build, `freestyle-limon` is a worktree copy. The window title is set by pywebview
+    and looks identical either way, so it proves nothing. Confirm with
+    `ps -o command= -p <pid>`.
+  - **`CFBundleVersion` does not break the tie** when one side omits it. Apple's rule
+    prefers the higher version, but with nothing to compare it falls through to what Apple
+    documents as choosing "in an unspecified manner", which here reliably picked the
+    worktree copy even though `dist/` had `CFBundleVersion=21`.
+  - **`lsregister -u` does not hold.** Launching an app re-registers it, so unregistering a
+    competing bundle is undone the moment anything starts it. The stale bundle has to stop
+    being an `.app` — delete it, or rename it to `.app.disabled`.
+- **Do not give every build its own identifier.** It does stop the substitution, but an
+  identifier macOS has never seen is refused on first Finder launch — the bare
+  "kann nicht geöffnet werden" dialog from `CoreServicesUIAgent` — while `open` from a
+  shell still works. That trades a wrong-binary bug for an approval prompt after every
+  build. `build.sh` therefore uses few, stable identifiers: the release ID, plus a
+  `.worktree` suffix when built from a linked worktree (detected via
+  `git rev-parse --git-dir` != `--git-common-dir`).
+- **This bug cannot be reproduced from a clean slate.** It needs the competing bundle
+  present, so killing everything first and relaunching always "works" and makes the bug look
+  imaginary. Reproduce it by deliberately constructing the state: leave the other copy in
+  place, launch from Finder, then check `ps -o command=` for the path that actually ran.
 - **`mdfind` cannot find duplicate bundles; use `lsregister`.** Spotlight never indexes
   dot-directories, so builds under `.claude/worktrees/*/dist` were invisible to the old
   `mdfind`-based guard in `build.sh` while remaining fully visible to LaunchServices (which

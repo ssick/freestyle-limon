@@ -14,24 +14,13 @@ from fastapi.staticfiles import StaticFiles
 from app import broadcast, credentials, state
 from app.libre_client import build_client, fetch_reading_and_history
 
-# When frozen into a standalone executable, __file__ resolves inside the
-# PyInstaller temp extraction dir, not next to the binary the user launched -
-# so .env has to be looked up relative to sys.executable in that case instead.
-# Inside a .app bundle, sys.executable lives at Foo.app/Contents/MacOS/foo, so
-# walk up to the folder containing Foo.app, where a user would naturally drop .env.
-if getattr(sys, "frozen", False):
-    exe_path = Path(sys.executable).resolve()
-    macos_dir = exe_path.parent
-    bundle_dir = macos_dir.parent.parent
-    if macos_dir.name == "MacOS" and macos_dir.parent.name == "Contents" and bundle_dir.suffix == ".app":
-        APP_DIR = bundle_dir.parent
-    else:
-        APP_DIR = macos_dir
-else:
-    APP_DIR = Path(__file__).resolve().parent.parent
-
+# .env is a development convenience for the browser-based dev server only. The
+# packaged .app has no sensible writable location beside itself (/Applications is
+# admin-owned and shared between apps), so it takes credentials from the Settings
+# window instead - see app/credentials.py, which reads ~/Library/Application Support.
 credentials.load()
-load_dotenv(APP_DIR / ".env")
+if not getattr(sys, "frozen", False):
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 logger = logging.getLogger("freestyle_limon")
 

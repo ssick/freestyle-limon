@@ -16,7 +16,7 @@ def build_client() -> tuple[PyLibreLinkUp, object]:
     email = os.environ.get("LIBRE_EMAIL")
     password = os.environ.get("LIBRE_PASSWORD")
     if not email or not password:
-        raise RuntimeError("Missing LIBRE_EMAIL / LIBRE_PASSWORD - check your .env file")
+        raise RuntimeError("No LibreLinkUp credentials - open Settings to enter your email and password")
 
     client = PyLibreLinkUp(email=email, password=password)
     try:

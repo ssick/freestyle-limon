@@ -54,10 +54,18 @@ This is a single-process FastAPI app with no database and no frontend build step
   the page finishes loading — code that depends on it (see `setupWidgetToggle` in
   `index.html`) must gate on the `pywebviewready` event, not check for it synchronously.
 - **Packaging** (`freestyle-limon.spec`, built with `pyinstaller`) bundles `static/` into the
-  app. When frozen (`sys.frozen`), `app/main.py` resolves `.env` relative to
-  `sys.executable`'s bundle location instead of `__file__`, since PyInstaller extracts the
-  source into a temp dir at runtime — see the comment at the top of `app/main.py` for the
-  exact path-walking logic.
+  app. Note that when frozen, `__file__` resolves inside PyInstaller's temp extraction dir
+  rather than next to the launched binary, so it can't be used to locate anything the user
+  placed on disk.
+- **Credentials come from a different place in each runtime.** The packaged app reads only
+  `~/Library/Application Support/Freestyle Limón/credentials.env` via `app/credentials.py`,
+  written by the Settings window; `app/main.py` skips `.env` entirely when `sys.frozen`. The
+  browser-based dev server reads the repo-root `.env` and has no other option, because
+  `static/settings.html` saves through `window.pywebview.api.save_credentials()` and there is
+  no HTTP route for it. A packaged build previously also looked for a `.env` in the folder
+  *containing* the `.app` — that was removed, since it resolves to `/Applications` for a
+  normal install and mainly served to produce a "check your .env file" error that sent users
+  hunting for a file they never had.
 - **Build the packaged app with `packaging/build.sh`.** It builds with `--clean` (so no
   leftover PyInstaller state from an earlier build can influence the result) and then
   warns if other bundles sharing this app's identifier are installed elsewhere.

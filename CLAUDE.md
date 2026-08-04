@@ -58,20 +58,41 @@ This is a single-process FastAPI app with no database and no frontend build step
   `sys.executable`'s bundle location instead of `__file__`, since PyInstaller extracts the
   source into a temp dir at runtime — see the comment at the top of `app/main.py` for the
   exact path-walking logic.
-- **The packaged app must be built as `target_arch='universal2'`** (set in
-  `freestyle-limon.spec`), via `packaging/build_universal2.sh`, not by running
-  `pyinstaller` directly against the `pyenv`-managed `.venv`. `pyenv` builds a
-  single-architecture Python targeting whatever OS it was compiled on — on this repo's
-  dev machines that's arm64 with a very high deployment target, which produces a `.app`
-  that only runs on that same OS/arch. The build script uses a separate python.org
-  universal2 Python instead. `Pillow` and `pydantic_core` don't publish universal2 wheels
-  on PyPI (only separate arm64/x86_64 ones), so the script merges them with
-  `delocate-merge` before running PyInstaller — see the script's comments for the exact
-  mechanism, and its `THIN_PACKAGES` list if a future dependency bump introduces another
-  one (PyInstaller's `IncompatibleBinaryArchError` names the offending file when this
-  happens). `LSMinimumSystemVersion` in the spec is `10.13` — the practical floor of the
-  entire current Python/PyInstaller/pyobjc packaging ecosystem, confirmed by checking the
-  actual PyPI wheel tags and PyInstaller's bootloader default, not an arbitrary choice.
+- **Two build scripts share `freestyle-limon.spec`.** `target_arch` and
+  `LSMinimumSystemVersion` in the spec are read from the `FREESTYLE_LIMON_TARGET_ARCH` /
+  `FREESTYLE_LIMON_MIN_MACOS` env vars (defaulting to `universal2` / `10.13`), because the
+  two scripts need different values from the same spec file — see each script's own
+  comments:
+  - **`packaging/build.sh`** — quick single-arch build against this repo's own
+    `pyenv`-managed `.venv`, for local testing. Overrides the env vars back to a plain
+    single-arch build targeting `11.0`, since `pyenv` builds a single-architecture Python
+    targeting whatever OS it was compiled on (on this repo's dev machines, arm64 with a
+    very high deployment target) — requesting `universal2` against that interpreter fails
+    with PyInstaller's `IncompatibleBinaryArchError`, since the interpreter itself is only
+    one arch's slice. It builds with `--clean` (so no leftover PyInstaller state from an
+    earlier build can influence the result) and then warns if other bundles sharing this
+    app's identifier are installed elsewhere.
+  - **`packaging/build_universal2.sh`** — the portable release build: `target_arch=` is
+    left at its `universal2` default, producing a `.app` that runs on **macOS 10.13+** on
+    both Intel and Apple Silicon (the practical floor of the entire current
+    Python/PyInstaller/pyobjc packaging ecosystem, confirmed by checking the actual PyPI
+    wheel tags and PyInstaller's bootloader default, not an arbitrary choice). Requires a
+    separate python.org universal2 Python instead of `pyenv`'s. `Pillow` and
+    `pydantic_core` don't publish universal2 wheels on PyPI (only separate arm64/x86_64
+    ones), so the script merges them with `delocate-merge` before running PyInstaller —
+    see the script's comments for the exact mechanism, and its `THIN_PACKAGES` list if a
+    future dependency bump introduces another one (PyInstaller's
+    `IncompatibleBinaryArchError` names the offending file when this happens).
+- **Duplicate app bundles are a debugging trap.** macOS LaunchServices resolves apps by
+  `CFBundleIdentifier`, not by path. If two bundles share this app's identifier
+  (`dev.stansick.freestyle-limon`), double-clicking one can launch the other — so a
+  rebuild appears to have no effect, and a feature verifiably present in the new binary
+  appears to be missing at runtime. This cost a long debugging session: an old copy in
+  `/Applications` kept being launched instead of freshly-built `dist/` copies, while every
+  check run against `dist/` (including extracting and disassembling its bundled bytecode)
+  correctly showed the feature present — making the reports look contradictory. When a
+  built app's runtime behavior contradicts its own verified contents, check *which binary
+  is actually running* (`ps aux | grep freestyle`) before suspecting the build.
 
 ## Testing conventions
 

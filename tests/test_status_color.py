@@ -3,7 +3,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 HIGH_COLOR = "#BF5700"
-SKIP_DIRS = {".venv", ".venv-build", "node_modules", "__pycache__", ".git", "build", "dist"}
+SKIP_DIRS = {".venv", ".venv-build", "node_modules", "__pycache__", ".git", ".claude", "build", "dist"}
 STALE_ORANGE = re.compile(r"'orange'|\"orange\"|#FFA500", re.IGNORECASE)
 
 

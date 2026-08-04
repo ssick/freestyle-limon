@@ -11,8 +11,10 @@ or native macOS app.
 
 This is an unofficial, independent project and is not affiliated with, endorsed by, or
 supported by Abbott or LibreLinkUp. It uses LibreLinkUp's unofficial API. Your
-`LIBRE_EMAIL` / `LIBRE_PASSWORD` credentials are read from a local `.env` file and are
-only sent to LibreLinkUp's API to fetch readings — never logged or sent anywhere else.
+`LIBRE_EMAIL` / `LIBRE_PASSWORD` credentials are read from a local `.env` file (or, in the
+standalone macOS app, entered via its Settings window and stored in
+`~/Library/Application Support/Freestyle Limón/credentials.env`) and are only sent to
+LibreLinkUp's API to fetch readings — never logged or sent anywhere else.
 
 ## Setup
 
@@ -44,13 +46,23 @@ pytest
 For running without a Python install, build a native `.app`:
 
 ```bash
-source .venv/bin/activate
-pip install -r requirements-build.txt
-pyinstaller freestyle-limon.spec
+./packaging/build.sh
 ```
 
-This produces `dist/freestyle-limon.app`. To use it:
+This produces `dist/Freestyle Limón.app`. The script builds with `--clean` (so no
+leftover PyInstaller state from an earlier build can influence the result) and then
+warns if any *other* copy of the app is installed elsewhere — see the caution below.
 
-1. Copy `dist/freestyle-limon.app` and `.env.example` to wherever you want to run it from (e.g. `/Applications`).
-2. Rename `.env.example` to `.env`, placed next to `freestyle-limon.app` (not inside the bundle), and fill in `LIBRE_EMAIL` / `LIBRE_PASSWORD`.
-3. Double-click `freestyle-limon.app`. It opens as a normal Mac app — no Terminal window, no browser tab — showing the dashboard in its own window. Quit via the window's close button or Cmd+Q.
+> **Only keep one copy of the app installed.** macOS resolves applications by their
+> bundle identifier, not by path. If a second bundle with the same identifier exists
+> anywhere (say, an older build sitting in `/Applications`), double-clicking your
+> freshly-built `.app` can silently launch the *other* one instead — so a rebuild
+> appears to change nothing, and features that are demonstrably present in the new
+> binary seem to be missing. If you keep a copy in `/Applications`, replace it after
+> every rebuild rather than running the two side by side.
+
+To use the built app:
+
+1. Copy `dist/Freestyle Limón.app` to wherever you want to run it from (e.g. `/Applications`) — replacing any previous copy, per the caution above.
+2. Double-click it. It opens as a normal Mac app — no Terminal window, no browser tab — showing the dashboard in its own window. Quit via the window's close button or Cmd+Q.
+3. On first launch, open its **Freestyle Limón → Settings…** menu to enter your `LIBRE_EMAIL` / `LIBRE_PASSWORD` — no `.env` file needed. (A `.env` placed next to the `.app`, the old setup method, still works as a fallback if you already have one.)

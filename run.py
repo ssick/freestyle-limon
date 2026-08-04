@@ -1,6 +1,7 @@
 """Entry point for the standalone macOS app (see `pyinstaller` build in README)."""
 import asyncio
 import io
+import os
 import socket
 import sys
 import threading
@@ -12,7 +13,7 @@ import uvicorn
 import webview
 from PyObjCTools import AppHelper
 
-from app import broadcast, state
+from app import broadcast, credentials, state
 from app.dock_icon_render import blink_alpha, pad_to_square, render_icon, render_spec
 from app.main import app
 
@@ -22,6 +23,13 @@ WIDGET_WIDTH = 180
 WIDGET_HEIGHT = 180
 WIDGET_MARGIN = 24
 
+SETTINGS_WIDTH = 420
+SETTINGS_HEIGHT = 320
+
+DOCK_ICON_UPDATE_INTERVAL_SECONDS = 45
+# Matches static/index.html's/widget.html's RETRY_INTERVAL_MS: poll fast until
+# the first successful reading lands, instead of waiting a full interval.
+DOCK_ICON_RETRY_INTERVAL_SECONDS = 2
 # Matches static/index.html's/widget.html's lcd-blink @keyframes half-cycle
 # (1s animation, two phases): ticking the icon this often is what makes it
 # visibly blink while stale. Data updates are push-driven (see
@@ -155,6 +163,45 @@ class WidgetApi:
             return WIDGET_MARGIN, WIDGET_MARGIN
 
 
+class SettingsApi:
+    """Exposed to the settings page as `window.pywebview.api`."""
+
+    def __init__(self, base_url: str) -> None:
+        self._base_url = base_url
+        self.settings_window: webview.Window | None = None
+
+    def open(self) -> None:
+        """Open the settings window, or bring it to the front if already open."""
+        if self.settings_window is not None:
+            self.settings_window.show()
+            return
+        self.settings_window = webview.create_window(
+            "Settings",
+            f"{self._base_url}/static/settings.html",
+            width=SETTINGS_WIDTH,
+            height=SETTINGS_HEIGHT,
+            resizable=False,
+            js_api=self,
+        )
+        self.settings_window.events.closed += self._on_settings_closed
+
+    def _on_settings_closed(self) -> None:
+        self.settings_window = None
+
+    def get_credentials(self) -> dict:
+        return {
+            "email": os.environ.get("LIBRE_EMAIL", ""),
+            "has_password": bool(os.environ.get("LIBRE_PASSWORD")),
+        }
+
+    def save_credentials(self, email: str, password: str) -> dict:
+        credentials.save(email, password or None)
+        return {"ok": True}
+
+    def get_connection_status(self) -> dict:
+        return credentials.connection_status()
+
+
 if __name__ == "__main__":
     # Bind to a random free port instead of a fixed one, so the app doesn't
     # clash with anything else already listening on a well-known port.
@@ -177,8 +224,11 @@ if __name__ == "__main__":
         "Freestyle Limón",
         base_url,
         width=480,
-        height=800,
-        min_size=(360, 600),
+        height=500,
+        min_size=(360, 480),
         js_api=widget_api,
     )
-    webview.start(gui="cocoa")
+
+    settings_api = SettingsApi(base_url)
+    settings_menu = webview.Menu('__app__', [webview.menu.MenuAction('Settings…', settings_api.open)])
+    webview.start(gui="cocoa", menu=[settings_menu])

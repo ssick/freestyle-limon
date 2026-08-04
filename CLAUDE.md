@@ -58,6 +58,19 @@ This is a single-process FastAPI app with no database and no frontend build step
   `sys.executable`'s bundle location instead of `__file__`, since PyInstaller extracts the
   source into a temp dir at runtime — see the comment at the top of `app/main.py` for the
   exact path-walking logic.
+- **Build the packaged app with `packaging/build.sh`.** It builds with `--clean` (so no
+  leftover PyInstaller state from an earlier build can influence the result) and then
+  warns if other bundles sharing this app's identifier are installed elsewhere.
+- **Duplicate app bundles are a debugging trap.** macOS LaunchServices resolves apps by
+  `CFBundleIdentifier`, not by path. If two bundles share this app's identifier
+  (`dev.stansick.freestyle-limon`), double-clicking one can launch the other — so a
+  rebuild appears to have no effect, and a feature verifiably present in the new binary
+  appears to be missing at runtime. This cost a long debugging session: an old copy in
+  `/Applications` kept being launched instead of freshly-built `dist/` copies, while every
+  check run against `dist/` (including extracting and disassembling its bundled bytecode)
+  correctly showed the feature present — making the reports look contradictory. When a
+  built app's runtime behavior contradicts its own verified contents, check *which binary
+  is actually running* (`ps aux | grep freestyle`) before suspecting the build.
 
 ## Testing conventions
 

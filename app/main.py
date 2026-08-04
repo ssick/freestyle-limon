@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from app import broadcast, state
+from app import broadcast, credentials, state
 from app.libre_client import build_client, fetch_reading_and_history
 
 # When frozen into a standalone executable, __file__ resolves inside the
@@ -30,11 +30,13 @@ if getattr(sys, "frozen", False):
 else:
     APP_DIR = Path(__file__).resolve().parent.parent
 
+credentials.load()
 load_dotenv(APP_DIR / ".env")
 
 logger = logging.getLogger("freestyle_limon")
 
 FETCH_INTERVAL_SECONDS = 60
+CREDENTIAL_POLL_INTERVAL_SECONDS = 1
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 
@@ -48,11 +50,36 @@ def is_stale_reading(current_timestamp: Optional[str], previous_timestamp: Optio
     return current_timestamp is not None and current_timestamp == previous_timestamp
 
 
+async def _sleep_until_next_fetch(
+    generation: int,
+    total_seconds: float = FETCH_INTERVAL_SECONDS,
+    poll_interval: float = CREDENTIAL_POLL_INTERVAL_SECONDS,
+) -> None:
+    """Sleep for total_seconds, but wake early if credentials changed.
+
+    Without this, saving new credentials in Settings wouldn't be retried
+    until the current 60s sleep happened to finish - so a Settings page
+    polling for a result for only ~20s could time out even for a correct
+    password, let alone catch a wrong one in time to report it.
+    """
+    elapsed = 0.0
+    while elapsed < total_seconds:
+        if credentials.get_generation() != generation:
+            return
+        await asyncio.sleep(poll_interval)
+        elapsed += poll_interval
+
+
 async def fetch_loop() -> None:
     client = None
     patient = None
+    last_seen_generation = credentials.get_generation()
     while True:
         try:
+            if credentials.get_generation() != last_seen_generation:
+                client = None
+                patient = None
+                last_seen_generation = credentials.get_generation()
             if client is None:
                 client, patient = await asyncio.to_thread(build_client)
             previous_reading = state.get_latest()
@@ -73,8 +100,9 @@ async def fetch_loop() -> None:
         except Exception as exc:
             logger.exception("Failed to fetch glucose reading")
             state.set_error(str(exc))
+        credentials.mark_attempted(last_seen_generation)
         await broadcast.publish(_build_latest_payload())
-        await asyncio.sleep(FETCH_INTERVAL_SECONDS)
+        await _sleep_until_next_fetch(last_seen_generation)
 
 
 @asynccontextmanager

@@ -224,8 +224,8 @@ if __name__ == "__main__":
         "Freestyle Limón",
         base_url,
         width=480,
-        height=800,
-        min_size=(360, 600),
+        height=500,
+        min_size=(360, 480),
         js_api=widget_api,
     )
 

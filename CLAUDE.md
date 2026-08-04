@@ -89,13 +89,28 @@ This is a single-process FastAPI app with no database and no frontend build step
   - **`lsregister -u` does not hold.** Launching an app re-registers it, so unregistering a
     competing bundle is undone the moment anything starts it. The stale bundle has to stop
     being an `.app` — delete it, or rename it to `.app.disabled`.
-- **Do not give every build its own identifier.** It does stop the substitution, but an
-  identifier macOS has never seen is refused on first Finder launch — the bare
-  "kann nicht geöffnet werden" dialog from `CoreServicesUIAgent` — while `open` from a
-  shell still works. That trades a wrong-binary bug for an approval prompt after every
-  build. `build.sh` therefore uses few, stable identifiers: the release ID, plus a
-  `.worktree` suffix when built from a linked worktree (detected via
-  `git rev-parse --git-dir` != `--git-common-dir`).
+- **`build.sh` uses few, stable identifiers**: the release ID, plus a `.worktree` suffix
+  when built from a linked worktree (detected via `git rev-parse --git-dir` !=
+  `--git-common-dir`). Combined with `CFBundleVersion` this is sufficient, so there is no
+  reason to mint an identifier per build.
+- **Changing a bundle's identifier at a path LaunchServices already knows poisons that
+  path.** Finder then refuses the app outright — the bare "kann nicht geöffnet werden"
+  dialog from `CoreServicesUIAgent` — while `open <path>` still launches it fine. Proven
+  by a single-variable test: one bundle at one path launched normally as `…​.exp1`, was
+  given the identifier `…​.exp2` in place (re-signed, valid, no competing bundle), and was
+  then refused. This is exactly what a per-build identifier does to `dist/` on every
+  build, and it is why per-build identifiers are unusable here.
+  - **`lsregister` cannot repair it.** `-f` leaves the database and the bundle agreeing on
+    the new identifier and the app is still refused; `-u` fails outright on this path with
+    `-10814` (`kLSApplicationNotFoundErr`).
+  - **The remedy is a new path.** The same poisoned bundle copied to a directory
+    LaunchServices has never seen launches normally. So if an app's identifier ever has to
+    change, ship it at a new location rather than overwriting the old one in place.
+  - Ruled out along the way, all by measurement: Gatekeeper and ad-hoc signing (a
+    perfectly working bundle also assesses as `rejected`), quarantine and translocation
+    (no xattr), a broken signature (`codesign --verify` passes), a crash (no crash report,
+    and it runs fine under a minimal Finder-like environment), and identifier novelty
+    itself (a brand-new identifier at a *fresh* path launches normally).
 - **This bug cannot be reproduced from a clean slate.** It needs the competing bundle
   present, so killing everything first and relaunching always "works" and makes the bug look
   imaginary. Reproduce it by deliberately constructing the state: leave the other copy in

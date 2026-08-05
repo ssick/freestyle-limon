@@ -60,23 +60,82 @@ This is a single-process FastAPI app with no database and no frontend build step
   the page finishes loading — code that depends on it (see `setupWidgetToggle` in
   `index.html`) must gate on the `pywebviewready` event, not check for it synchronously.
 - **Packaging** (`freestyle-limon.spec`, built with `pyinstaller`) bundles `static/` into the
-  app. When frozen (`sys.frozen`), `app/main.py` resolves `.env` relative to
-  `sys.executable`'s bundle location instead of `__file__`, since PyInstaller extracts the
-  source into a temp dir at runtime — see the comment at the top of `app/main.py` for the
-  exact path-walking logic.
+  app. Note that when frozen, `__file__` resolves inside PyInstaller's temp extraction dir
+  rather than next to the launched binary, so it can't be used to locate anything the user
+  placed on disk.
+- **Credentials come from a different place in each runtime.** The packaged app reads only
+  `~/Library/Application Support/Freestyle Limón/credentials.env` via `app/credentials.py`,
+  written by the Settings window; `app/main.py` skips `.env` entirely when `sys.frozen`. The
+  browser-based dev server reads the repo-root `.env` and has no other option, because
+  `static/settings.html` saves through `window.pywebview.api.save_credentials()` and there is
+  no HTTP route for it. A packaged build previously also looked for a `.env` in the folder
+  *containing* the `.app` — that was removed, since it resolves to `/Applications` for a
+  normal install and mainly served to produce a "check your .env file" error that sent users
+  hunting for a file they never had.
 - **Build the packaged app with `packaging/build.sh`.** It builds with `--clean` (so no
   leftover PyInstaller state from an earlier build can influence the result) and then
   warns if other bundles sharing this app's identifier are installed elsewhere.
-- **Duplicate app bundles are a debugging trap.** macOS LaunchServices resolves apps by
-  `CFBundleIdentifier`, not by path. If two bundles share this app's identifier
-  (`dev.stansick.freestyle-limon`), double-clicking one can launch the other — so a
-  rebuild appears to have no effect, and a feature verifiably present in the new binary
-  appears to be missing at runtime. This cost a long debugging session: an old copy in
-  `/Applications` kept being launched instead of freshly-built `dist/` copies, while every
-  check run against `dist/` (including extracting and disassembling its bundled bytecode)
-  correctly showed the feature present — making the reports look contradictory. When a
-  built app's runtime behavior contradicts its own verified contents, check *which binary
-  is actually running* (`ps aux | grep freestyle`) before suspecting the build.
+- **A shared `CFBundleIdentifier` makes Finder launch the WRONG BINARY.** Not the wrong
+  window, not the wrong focus — a genuinely different executable. Double-clicking
+  `dist/Freestyle Limón.app` started
+  `.claude/worktrees/agent-*/dist/freestyle-limon.app` instead, and only that one process
+  ran; the double-clicked bundle never started at all. `open <path>` from a shell always
+  gets it right, because an explicit path bypasses identifier resolution. That asymmetry —
+  Finder wrong, terminal right, same bundle — is the signature of this bug.
+  - **The giveaway is the menu bar**, which shows `CFBundleName`: `Freestyle Limón` is the
+    real build, `freestyle-limon` is a worktree copy. The window title is set by pywebview
+    and looks identical either way, so it proves nothing. Confirm with
+    `ps -o command= -p <pid>`.
+  - **`CFBundleVersion` is what decides the winner, and it is load-bearing.** Measured with
+    two bundles sharing the identifier and differing only in version (21 vs 10):
+    double-clicking *either* one launched the **higher-versioned** bundle, confirmed via
+    the About panel and `CFBundleName` in the menu bar. Apple's documented "prefer the
+    latest `CFBundleVersion`" rule does apply to launching an app, not only to opening
+    documents.
+  - **A missing `CFBundleVersion` is not treated as "lowest" — it breaks the rule.** The
+    worktree bundle had none at all, so even against `dist/` at version 21 it still won:
+    with one side absent there is nothing to compare and macOS falls through to what its
+    own docs call choosing "in an unspecified manner". So the shared identifier was
+    necessary but not sufficient; the absent version is what let the wrong binary win.
+    **Never ship a build without `CFBundleVersion`** — `build.sh` sets it from
+    `git rev-list --count HEAD`. This is also what protects end users who keep an old copy
+    alongside a new one: double-clicking either runs the newest installed build.
+  - **`lsregister -u` does not hold.** Launching an app re-registers it, so unregistering a
+    competing bundle is undone the moment anything starts it. The stale bundle has to stop
+    being an `.app` — delete it, or rename it to `.app.disabled`.
+- **`build.sh` uses few, stable identifiers**: the release ID, plus a `.worktree` suffix
+  when built from a linked worktree (detected via `git rev-parse --git-dir` !=
+  `--git-common-dir`). Combined with `CFBundleVersion` this is sufficient, so there is no
+  reason to mint an identifier per build.
+- **Changing a bundle's identifier at a path LaunchServices already knows poisons that
+  path.** Finder then refuses the app outright — the bare "kann nicht geöffnet werden"
+  dialog from `CoreServicesUIAgent` — while `open <path>` still launches it fine. Proven
+  by a single-variable test: one bundle at one path launched normally as `…​.exp1`, was
+  given the identifier `…​.exp2` in place (re-signed, valid, no competing bundle), and was
+  then refused. This is exactly what a per-build identifier does to `dist/` on every
+  build, and it is why per-build identifiers are unusable here.
+  - **`lsregister` cannot repair it.** `-f` leaves the database and the bundle agreeing on
+    the new identifier and the app is still refused; `-u` fails outright on this path with
+    `-10814` (`kLSApplicationNotFoundErr`).
+  - **The remedy is a new path.** The same poisoned bundle copied to a directory
+    LaunchServices has never seen launches normally. So if an app's identifier ever has to
+    change, ship it at a new location rather than overwriting the old one in place.
+  - Ruled out along the way, all by measurement: Gatekeeper and ad-hoc signing (a
+    perfectly working bundle also assesses as `rejected`), quarantine and translocation
+    (no xattr), a broken signature (`codesign --verify` passes), a crash (no crash report,
+    and it runs fine under a minimal Finder-like environment), and identifier novelty
+    itself (a brand-new identifier at a *fresh* path launches normally).
+- **This bug cannot be reproduced from a clean slate.** It needs the competing bundle
+  present, so killing everything first and relaunching always "works" and makes the bug look
+  imaginary. Reproduce it by deliberately constructing the state: leave the other copy in
+  place, launch from Finder, then check `ps -o command=` for the path that actually ran.
+- **`mdfind` cannot find duplicate bundles; use `lsregister`.** Spotlight never indexes
+  dot-directories, so builds under `.claude/worktrees/*/dist` were invisible to the old
+  `mdfind`-based guard in `build.sh` while remaining fully visible to LaunchServices (which
+  descends into invisible directories). The guard printed "none found" precisely when it
+  mattered. It now parses `lsregister -dump`, which immediately surfaced bundles the old
+  check never saw — including one on an unmounted volume (`/Volumes/stan`). Related trap:
+  grep those paths case-insensitively, since the bundle is named `Freestyle Limón.app`.
 
 ## Testing conventions
 

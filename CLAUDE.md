@@ -41,12 +41,18 @@ This is a single-process FastAPI app with no database and no frontend build step
   `target_low`/`target_high` from the connection — never trust the API's own flags. See the
   tests in `test_libre_client.py` for the specific cases this covers.
 - **Frontend** (`static/index.html`, `static/widget.html`) is vanilla JS/SVG, no framework, no
-  build step. Both pages independently poll `/api/latest` every 30s (falling back to a 2s
-  retry until the first successful reading) and render client-side. The history chart in
-  `index.html` is hand-rolled SVG (scales, hover/tooltip, threshold lines) rather than a
-  charting library. `GET /api/stream` exists but isn't consumed yet — neither page nor the
-  Dock icon (`run.py`) has been switched to `EventSource`; that's a planned follow-up
-  increment to close the sync gap between windows described in the `app/main.py` bullet above.
+  build step. Both pages subscribe to `GET /api/stream` with `EventSource` and render
+  client-side. The history chart in `index.html` is hand-rolled SVG (scales, hover/tooltip,
+  threshold lines) rather than a charting library.
+- **`static/lemon.svg` is a traced image, not a designed vector** — 15 stacked opaque colour
+  layers with no outline and no single base shape, so the artwork's silhouette is only the
+  *union* of those layers. Its first path (`id="lemon-backing"`) is a generated opaque
+  silhouette of that union, dilated by ~1.5 user units, that exists purely so nothing behind
+  the SVG can show through: on a light page a hairline seam where two layers abut is
+  invisible, but the widget floats over the desktop (`transparent=True` in `run.py`), and on
+  a dark desktop the same seams read as the background bleeding through the fruit. It was
+  produced by rasterising the artwork, dilating the alpha mask and contour-tracing it — if
+  the artwork is ever re-exported, regenerate the backing path rather than hand-editing it.
 - **`run.py`** is a separate entry point (not used by `uvicorn --reload`) for the packaged
   desktop app: it runs the same FastAPI `app` via `uvicorn` in a background thread inside a
   `pywebview` window, and exposes a `WidgetApi` as `window.pywebview.api` so the page can

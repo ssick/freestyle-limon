@@ -40,13 +40,23 @@ This is a single-process FastAPI app with no database and no frontend build step
   Range status (high/low/in-range) must always be derived by comparing `value` against
   `target_low`/`target_high` from the connection — never trust the API's own flags. See the
   tests in `test_libre_client.py` for the specific cases this covers.
-- **Frontend** (`static/index.html`, `static/widget.html`) is vanilla JS/SVG, no framework, no
-  build step. Both pages independently poll `/api/latest` every 30s (falling back to a 2s
-  retry until the first successful reading) and render client-side. The history chart in
-  `index.html` is hand-rolled SVG (scales, hover/tooltip, threshold lines) rather than a
-  charting library. `GET /api/stream` exists but isn't consumed yet — neither page nor the
-  Dock icon (`run.py`) has been switched to `EventSource`; that's a planned follow-up
-  increment to close the sync gap between windows described in the `app/main.py` bullet above.
+- **Frontend** (`static/index.html`, `static/widget.html`, `static/settings.html`) is vanilla
+  JS/SVG, no framework, no build step. `index.html` and `widget.html` subscribe to
+  `GET /api/stream` via `EventSource` and render client-side on each push. The history chart
+  in `index.html` is hand-rolled SVG (scales, hover/tooltip, threshold lines) rather than a
+  charting library.
+- **Frontend JS must not use syntax newer than Safari 13.1** (no `?.`, `??`, `||=`/`&&=`/`??=`,
+  etc.), even though `LSMinimumSystemVersion` is 10.13 and Safari 13.1.2 (which supports all
+  of that) is the newest Safari Apple ever shipped for 10.13. Real machines still on 10.13
+  aren't guaranteed to have taken that update — one test machine turned out to be on Safari
+  11.1 (WebKit build `13605.3.8`, from 2018). WKWebView loads the *system* WebKit.framework,
+  not something the app bundles, so this isn't fixable by the app at all. A single
+  unsupported-syntax `SyntaxError` anywhere in an inline `<script>` block silently aborts the
+  entire block — every symptom looks unrelated (an `EventSource` that never connects, a click
+  handler that never attaches, a form submit that silently does nothing) but traces back to
+  one parse failure. `tests/test_status_color.py`-style static regression tests don't catch
+  this, since evaluating the JS engine's parser behavior needs a real (old) WebKit, not a
+  Python string check - your best bet is a real 10.13 machine.
 - **`run.py`** is a separate entry point (not used by `uvicorn --reload`) for the packaged
   desktop app: it runs the same FastAPI `app` via `uvicorn` in a background thread inside a
   `pywebview` window, and exposes a `WidgetApi` as `window.pywebview.api` so the page can

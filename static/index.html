@@ -170,8 +170,10 @@
       const tooltip = document.getElementById('chart-tooltip');
 
       function hide() {
-        document.getElementById('chart-crosshair')?.setAttribute('opacity', 0);
-        document.getElementById('chart-crosshair-dot')?.setAttribute('opacity', 0);
+        const crosshair = document.getElementById('chart-crosshair');
+        if (crosshair) crosshair.setAttribute('opacity', 0);
+        const crosshairDot = document.getElementById('chart-crosshair-dot');
+        if (crosshairDot) crosshairDot.setAttribute('opacity', 0);
         tooltip.style.opacity = 0;
       }
 
@@ -215,7 +217,7 @@
         const color = statusColor(data.is_high, data.is_low);
 
         const valueEl = document.getElementById('value');
-        valueEl.textContent = `${data.value} mg/dL ${data.trend ?? ''}`;
+        valueEl.textContent = `${data.value} mg/dL ${data.trend || ''}`;
         valueEl.style.color = data.stale ? '#999' : color;
 
         const digitsEl = document.getElementById('lemon-digits');
@@ -228,9 +230,9 @@
           : '';
         document.title = `${data.value} mg/dL · Freestyle Limón`;
 
-        let historyForChart = data.history ?? [];
+        let historyForChart = data.history || [];
         const lastPoint = historyForChart[historyForChart.length - 1];
-        if (data.timestamp && (!lastPoint?.timestamp || new Date(data.timestamp) > new Date(lastPoint.timestamp))) {
+        if (data.timestamp && (!lastPoint || !lastPoint.timestamp || new Date(data.timestamp) > new Date(lastPoint.timestamp))) {
           historyForChart = [...historyForChart, {
             value: data.value,
             timestamp: data.timestamp,

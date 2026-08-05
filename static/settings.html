@@ -67,7 +67,7 @@
 
     function setStatus(text, kind) {
       statusEl.textContent = text;
-      statusEl.className = kind ?? '';
+      statusEl.className = kind || '';
     }
 
     async function loadCredentials() {

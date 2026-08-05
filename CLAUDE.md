@@ -53,6 +53,24 @@ This is a single-process FastAPI app with no database and no frontend build step
   toggle a second frameless "floating widget" window. `window.pywebview` only exists after
   the page finishes loading — code that depends on it (see `setupWidgetToggle` in
   `index.html`) must gate on the `pywebviewready` event, not check for it synchronously.
+- **`run.py` patches `WKNavigationAction` on startup** (`_patch_webkit_navigation_action_for_old_webkit`)
+  to work around a pywebview 6.2.1 bug that leaves the main window permanently blank on
+  macOS 10.13: pywebview's Cocoa navigation delegate unconditionally calls
+  `WKNavigationAction.shouldPerformDownload()`, a selector Apple only added in macOS 11.3.
+  On 10.13 it doesn't exist, so the call raises inside the delegate callback before the
+  completion handler is invoked — WebKit is left waiting forever for a navigation decision
+  (visible in Console.app as WebCore's `DocumentLoader::startLoadingMainResource: Returning
+  empty document`, plus a "Completion handler ... was not called" warning when the delegate
+  is later deallocated), so the window never renders anything, even though the app process
+  itself is fine (e.g. the Dock icon, which is drawn independently in Python/AppKit, keeps
+  updating). There's no pywebview release newer than 6.2.1 with a fix, and the last version
+  before this call was added (5.3.2) is over a year of other fixes behind, so this patches
+  the gap instead of downgrading. The fix adds the missing `shouldPerformDownload` selector
+  directly onto `WKNavigationAction` (returning `False`) via `objc.classAddMethods`, rather
+  than reassigning pywebview's delegate method itself — that was tried first and crashed
+  with `TypeError: cannot call block without a signature`, since the delegate method's
+  `handler` argument is an Objective-C block, and reassigning the method loses the block's
+  bridging metadata that PyObjC only wires up when the class is originally defined.
 - **Packaging** (`freestyle-limon.spec`, built with `pyinstaller`) bundles `static/` into the
   app. When frozen (`sys.frozen`), `app/main.py` resolves `.env` relative to
   `sys.executable`'s bundle location instead of `__file__`, since PyInstaller extracts the

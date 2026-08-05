@@ -202,7 +202,45 @@ class SettingsApi:
         return credentials.connection_status()
 
 
+def _patch_webkit_navigation_action_for_old_webkit() -> None:
+    """Work around a pywebview 6.2.1 crash on macOS 10.13's WebKit.
+
+    pywebview's Cocoa navigation delegate unconditionally calls
+    ``WKNavigationAction.shouldPerformDownload()``, a property Apple only added in
+    macOS 11.3. On 10.13 the selector doesn't exist at all, so the call raises
+    inside the delegate callback before it reaches the completion handler -
+    WebKit is left waiting forever for a navigation decision (observed as
+    WebCore's "Returning empty document" and a leaked completion handler in
+    Console.app), so the window stays blank. There's no pywebview release newer
+    than 6.2.1 with a fix, and the last version before this call was added
+    (5.3.2) is over a year of other fixes behind.
+
+    Patching pywebview's delegate method directly (to guard the call) was tried
+    first and crashed with "cannot call block without a signature": its
+    `handler` parameter is an Objective-C block, and PyObjC needs bridging
+    metadata for that block that's only wired up when the class is defined, not
+    when a method is reassigned afterwards. Adding the missing selector onto
+    WKNavigationAction itself avoids that entirely - it takes no block argument,
+    and pywebview's original, untouched code just works once the selector exists.
+    """
+    import objc
+    import WebKit
+
+    if hasattr(WebKit.WKNavigationAction, "shouldPerformDownload"):
+        return
+
+    def shouldPerformDownload(self) -> bool:
+        return False
+
+    objc.classAddMethods(
+        WebKit.WKNavigationAction,
+        [objc.selector(shouldPerformDownload, selector=b"shouldPerformDownload", signature=b"B@:")],
+    )
+
+
 if __name__ == "__main__":
+    _patch_webkit_navigation_action_for_old_webkit()
+
     # Bind to a random free port instead of a fixed one, so the app doesn't
     # clash with anything else already listening on a well-known port.
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

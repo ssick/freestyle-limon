@@ -21,7 +21,7 @@ def test_latest_pending_when_no_reading(monkeypatch):
 
 def test_latest_pending_surfaces_fetch_error(monkeypatch):
     monkeypatch.setattr(state, "_latest", None)
-    monkeypatch.setattr(state, "_error", "Missing LIBRE_EMAIL / LIBRE_PASSWORD - check your .env file")
+    monkeypatch.setattr(state, "_error", "No LibreLinkUp credentials - open Settings to enter your email and password")
 
     with TestClient(app) as client:
         response = client.get("/api/latest")
@@ -29,7 +29,7 @@ def test_latest_pending_surfaces_fetch_error(monkeypatch):
     assert response.status_code == 200
     assert response.json() == {
         "status": "pending",
-        "error": "Missing LIBRE_EMAIL / LIBRE_PASSWORD - check your .env file",
+        "error": "No LibreLinkUp credentials - open Settings to enter your email and password",
     }
 
 

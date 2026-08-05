@@ -11,10 +11,11 @@ or native macOS app.
 
 This is an unofficial, independent project and is not affiliated with, endorsed by, or
 supported by Abbott or LibreLinkUp. It uses LibreLinkUp's unofficial API. Your
-`LIBRE_EMAIL` / `LIBRE_PASSWORD` credentials are read from a local `.env` file (or, in the
-standalone macOS app, entered via its Settings window and stored in
-`~/Library/Application Support/Freestyle Limón/credentials.env`) and are only sent to
-LibreLinkUp's API to fetch readings — never logged or sent anywhere else.
+`LIBRE_EMAIL` / `LIBRE_PASSWORD` credentials are entered via the standalone macOS app's
+Settings window and stored in `~/Library/Application Support/Freestyle Limón/credentials.env`;
+for the browser-based dev server they are read from a local `.env` file instead. Either way
+they are only sent to LibreLinkUp's API to fetch readings — never logged or sent anywhere
+else.
 
 ## Setup
 
@@ -33,6 +34,11 @@ uvicorn app.main:app --reload
 ```
 
 Open http://localhost:8000
+
+The dev server is configured entirely through `.env`. Its Settings page is served through
+`pywebview` and so is only reachable in the packaged app — if the dev server reports
+"No LibreLinkUp credentials - open Settings…", set `LIBRE_EMAIL` / `LIBRE_PASSWORD` in
+`.env` instead.
 
 ## Test
 
@@ -65,4 +71,4 @@ To use the built app:
 
 1. Copy `dist/Freestyle Limón.app` to wherever you want to run it from (e.g. `/Applications`) — replacing any previous copy, per the caution above.
 2. Double-click it. It opens as a normal Mac app — no Terminal window, no browser tab — showing the dashboard in its own window. Quit via the window's close button or Cmd+Q.
-3. On first launch, open its **Freestyle Limón → Settings…** menu to enter your `LIBRE_EMAIL` / `LIBRE_PASSWORD` — no `.env` file needed. (A `.env` placed next to the `.app`, the old setup method, still works as a fallback if you already have one.)
+3. On first launch, open its **Freestyle Limón → Settings…** menu to enter your `LIBRE_EMAIL` / `LIBRE_PASSWORD`. This is the only way to configure the packaged app — it does not read `.env` files. The credentials are stored per-user in `~/Library/Application Support/Freestyle Limón/credentials.env` and survive rebuilds and reinstalls.

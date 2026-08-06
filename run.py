@@ -102,12 +102,16 @@ async def _dock_icon_subscriber_loop() -> None:
         AppHelper.callAfter(_render_dock_icon)
 
 
-def _run_server(sock: socket.socket, loop_ready: threading.Event, loop_box: list) -> None:
+def _run_server(
+    sock: socket.socket, loop_ready: threading.Event, loop_box: list, server_box: list
+) -> None:
     async def main() -> None:
         loop_box.append(asyncio.get_running_loop())
-        loop_ready.set()
         config = uvicorn.Config(app, host=HOST, log_level="warning")
-        await uvicorn.Server(config).serve(sockets=[sock])
+        server = uvicorn.Server(config)
+        server_box.append(server)
+        loop_ready.set()
+        await server.serve(sockets=[sock])
 
     asyncio.run(main())
 
@@ -238,6 +242,55 @@ def _patch_webkit_navigation_action_for_old_webkit() -> None:
     )
 
 
+def _patch_app_delegate_for_graceful_shutdown(
+    loop: asyncio.AbstractEventLoop, server: uvicorn.Server, server_thread: threading.Thread
+) -> None:
+    """Make Quit wait for the background server to actually stop before exiting.
+
+    Without this, quitting could crash with SIGSEGV in libcrypto.3.dylib:
+    `-[NSApplication terminate:]` calls `exit()` directly, which runs OpenSSL's
+    atexit cleanup (`OPENSSL_cleanup`) - but if `fetch_loop`'s LibreLinkUp
+    request (dispatched via `asyncio.to_thread`) is still using OpenSSL on its
+    executor thread at that exact moment, the cleanup races the live request
+    and segfaults. `task.cancel()` in `app/main.py`'s `lifespan` doesn't stop
+    that: cancelling the asyncio-level task can't interrupt a blocking call
+    already running in its executor thread - only actually waiting for the
+    thread to finish does. `asyncio.run()` already waits for the default
+    executor to drain as part of its own cleanup (this is `asyncio`'s
+    documented behavior, not something added here) - so returning
+    `NSTerminateLater` from `applicationShouldTerminate:`, triggering a
+    graceful `uvicorn` shutdown, and joining the background thread before
+    replying is enough to guarantee no thread is still touching OpenSSL when
+    `exit()` finally runs.
+    """
+    import objc
+    import webview.platforms.cocoa as cocoa
+
+    original = cocoa.BrowserView.AppDelegate.applicationShouldTerminate_
+    shutdown_started = False
+
+    def patched(self, sender):
+        nonlocal shutdown_started
+        should_close = original(self, sender)
+        if not should_close or shutdown_started:
+            return should_close
+        shutdown_started = True
+
+        def shutdown_and_reply() -> None:
+            loop.call_soon_threadsafe(setattr, server, "should_exit", True)
+            server_thread.join(timeout=10)
+            AppHelper.callAfter(
+                AppKit.NSApplication.sharedApplication().replyToApplicationShouldTerminate_, True
+            )
+
+        threading.Thread(target=shutdown_and_reply, daemon=True).start()
+        return AppKit.NSTerminateLater
+
+    cocoa.BrowserView.AppDelegate.applicationShouldTerminate_ = objc.selector(
+        patched, selector=original.selector, signature=original.signature
+    )
+
+
 if __name__ == "__main__":
     _patch_webkit_navigation_action_for_old_webkit()
 
@@ -250,11 +303,14 @@ if __name__ == "__main__":
 
     server_loop_ready = threading.Event()
     server_loop_box: list = []
-    threading.Thread(
-        target=_run_server, args=(sock, server_loop_ready, server_loop_box), daemon=True
-    ).start()
+    server_box: list = []
+    server_thread = threading.Thread(
+        target=_run_server, args=(sock, server_loop_ready, server_loop_box, server_box), daemon=True
+    )
+    server_thread.start()
     server_loop_ready.wait()
     asyncio.run_coroutine_threadsafe(_dock_icon_subscriber_loop(), server_loop_box[0])
+    _patch_app_delegate_for_graceful_shutdown(server_loop_box[0], server_box[0], server_thread)
 
     base_url = f"http://{HOST}:{port}"
     widget_api = WidgetApi(base_url)

@@ -40,10 +40,23 @@ This is a single-process FastAPI app with no database and no frontend build step
   Range status (high/low/in-range) must always be derived by comparing `value` against
   `target_low`/`target_high` from the connection — never trust the API's own flags. See the
   tests in `test_libre_client.py` for the specific cases this covers.
-- **Frontend** (`static/index.html`, `static/widget.html`) is vanilla JS/SVG, no framework, no
-  build step. Both pages subscribe to `GET /api/stream` with `EventSource` and render
-  client-side. The history chart in `index.html` is hand-rolled SVG (scales, hover/tooltip,
-  threshold lines) rather than a charting library.
+- **Frontend** (`static/index.html`, `static/widget.html`, `static/settings.html`) is vanilla
+  JS/SVG, no framework, no build step. `index.html` and `widget.html` subscribe to
+  `GET /api/stream` via `EventSource` and render client-side on each push. The history chart
+  in `index.html` is hand-rolled SVG (scales, hover/tooltip, threshold lines) rather than a
+  charting library.
+- **Frontend JS must not use syntax newer than Safari 13.1** (no `?.`, `??`, `||=`/`&&=`/`??=`,
+  etc.), even though `LSMinimumSystemVersion` is 10.13 and Safari 13.1.2 (which supports all
+  of that) is the newest Safari Apple ever shipped for 10.13. Real machines still on 10.13
+  aren't guaranteed to have taken that update — one test machine turned out to be on Safari
+  11.1 (WebKit build `13605.3.8`, from 2018). WKWebView loads the *system* WebKit.framework,
+  not something the app bundles, so this isn't fixable by the app at all. A single
+  unsupported-syntax `SyntaxError` anywhere in an inline `<script>` block silently aborts the
+  entire block — every symptom looks unrelated (an `EventSource` that never connects, a click
+  handler that never attaches, a form submit that silently does nothing) but traces back to
+  one parse failure. `tests/test_status_color.py`-style static regression tests don't catch
+  this, since evaluating the JS engine's parser behavior needs a real (old) WebKit, not a
+  Python string check - your best bet is a real 10.13 machine.
 - **`static/lemon.svg` is a traced image, not a designed vector** — 15 stacked opaque colour
   layers with no outline and no single base shape, so the artwork's silhouette is only the
   *union* of those layers. Its first path (`id="lemon-backing"`) is a generated opaque
@@ -59,6 +72,24 @@ This is a single-process FastAPI app with no database and no frontend build step
   toggle a second frameless "floating widget" window. `window.pywebview` only exists after
   the page finishes loading — code that depends on it (see `setupWidgetToggle` in
   `index.html`) must gate on the `pywebviewready` event, not check for it synchronously.
+- **`run.py` patches `WKNavigationAction` on startup** (`_patch_webkit_navigation_action_for_old_webkit`)
+  to work around a pywebview 6.2.1 bug that leaves the main window permanently blank on
+  macOS 10.13: pywebview's Cocoa navigation delegate unconditionally calls
+  `WKNavigationAction.shouldPerformDownload()`, a selector Apple only added in macOS 11.3.
+  On 10.13 it doesn't exist, so the call raises inside the delegate callback before the
+  completion handler is invoked — WebKit is left waiting forever for a navigation decision
+  (visible in Console.app as WebCore's `DocumentLoader::startLoadingMainResource: Returning
+  empty document`, plus a "Completion handler ... was not called" warning when the delegate
+  is later deallocated), so the window never renders anything, even though the app process
+  itself is fine (e.g. the Dock icon, which is drawn independently in Python/AppKit, keeps
+  updating). There's no pywebview release newer than 6.2.1 with a fix, and the last version
+  before this call was added (5.3.2) is over a year of other fixes behind, so this patches
+  the gap instead of downgrading. The fix adds the missing `shouldPerformDownload` selector
+  directly onto `WKNavigationAction` (returning `False`) via `objc.classAddMethods`, rather
+  than reassigning pywebview's delegate method itself — that was tried first and crashed
+  with `TypeError: cannot call block without a signature`, since the delegate method's
+  `handler` argument is an Objective-C block, and reassigning the method loses the block's
+  bridging metadata that PyObjC only wires up when the class is originally defined.
 - **Packaging** (`freestyle-limon.spec`, built with `pyinstaller`) bundles `static/` into the
   app. Note that when frozen, `__file__` resolves inside PyInstaller's temp extraction dir
   rather than next to the launched binary, so it can't be used to locate anything the user
@@ -72,9 +103,44 @@ This is a single-process FastAPI app with no database and no frontend build step
   *containing* the `.app` — that was removed, since it resolves to `/Applications` for a
   normal install and mainly served to produce a "check your .env file" error that sent users
   hunting for a file they never had.
-- **Build the packaged app with `packaging/build.sh`.** It builds with `--clean` (so no
-  leftover PyInstaller state from an earlier build can influence the result) and then
-  warns if other bundles sharing this app's identifier are installed elsewhere.
+- **Two build scripts share `freestyle-limon.spec`.** `target_arch` and
+  `LSMinimumSystemVersion` in the spec are read from the `FREESTYLE_LIMON_TARGET_ARCH` /
+  `FREESTYLE_LIMON_MIN_MACOS` env vars (defaulting to `universal2` / `10.13`), because the
+  two scripts need different values from the same spec file — see each script's own
+  comments:
+  - **`packaging/build.sh`** — quick single-arch build against this repo's own
+    `pyenv`-managed `.venv`. Overrides the env vars back to a plain single-arch build
+    targeting `11.0`, since `pyenv` builds a single-architecture Python targeting whatever
+    OS it was compiled on (on this repo's dev machines, arm64 with a very high deployment
+    target) — requesting `universal2` against that interpreter fails with PyInstaller's
+    `IncompatibleBinaryArchError`, since the interpreter itself is only one arch's slice.
+    It builds with `--clean` (so no leftover PyInstaller state from an earlier build can
+    influence the result), derives this build's bundle identifier and version (see the
+    "duplicate bundles" bullets below), and warns if any other bundle registered with
+    macOS still shares the resulting identifier. Its `CFBundleShortVersionString` gets a
+    `-$(uname -m)` suffix (e.g. `0.1.0-arm64`), visible as-is in the standard About panel
+    (pywebview wires this up automatically, no extra menu code needed) — both this and the
+    universal2 build may be distributed, just to different target machines (this one only
+    runs on the exact OS version and CPU architecture it was built on), so the arch is
+    worth seeing at a glance to tell them apart.
+  - **`packaging/build_universal2.sh`** — the portable release build: `target_arch=` is
+    left at its `universal2` default, producing a `.app` that runs on **macOS 10.13+** on
+    both Intel and Apple Silicon (the practical floor of the entire current
+    Python/PyInstaller/pyobjc packaging ecosystem, confirmed by checking the actual PyPI
+    wheel tags and PyInstaller's bootloader default, not an arbitrary choice). Requires a
+    separate python.org universal2 Python instead of `pyenv`'s. `Pillow` and
+    `pydantic_core` don't publish universal2 wheels on PyPI (only separate arm64/x86_64
+    ones), so the script merges them with `delocate-merge` before running PyInstaller —
+    see the script's comments for the exact mechanism, and its `THIN_PACKAGES` list if a
+    future dependency bump introduces another one (PyInstaller's
+    `IncompatibleBinaryArchError` names the offending file when this happens). Derives its
+    bundle identifier the same way `build.sh` does (same logic, duplicated rather than
+    shared between two standalone shell scripts), but doesn't repeat `build.sh`'s
+    LaunchServices registration/duplicate-copy check — that's about the fast local-iteration
+    loop this script isn't meant for. Its version gets a `-universal2` suffix instead (or
+    whatever `FREESTYLE_LIMON_TARGET_ARCH` resolves to, mirroring the spec's own default
+    rather than hardcoding it), for the same reason: telling it apart from `build.sh`'s
+    output at a glance in the About panel.
 - **A shared `CFBundleIdentifier` makes Finder launch the WRONG BINARY.** Not the wrong
   window, not the wrong focus — a genuinely different executable. Double-clicking
   `dist/Freestyle Limón.app` started

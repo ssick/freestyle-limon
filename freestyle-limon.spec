@@ -1,5 +1,4 @@
 # -*- mode: python ; coding: utf-8 -*-
-
 import os
 
 # Every release gets its own bundle identifier. macOS keys an app's identity -
@@ -11,6 +10,11 @@ BUNDLE_ID = os.environ.get('FL_BUNDLE_ID', 'dev.stansick.freestyle-limon')
 VERSION = os.environ.get('FL_VERSION', '0.1.0')
 BUILD = os.environ.get('FL_BUILD', '0')
 
+# Overridable so packaging/build.sh (single-arch pyenv .venv) can request a plain
+# single-arch build instead of universal2, which requires build_universal2.sh's
+# separate python.org interpreter - see CLAUDE.md for why.
+TARGET_ARCH = os.environ.get("FREESTYLE_LIMON_TARGET_ARCH", "universal2") or None
+MIN_MACOS = os.environ.get("FREESTYLE_LIMON_MIN_MACOS", "10.13")
 
 a = Analysis(
     ['run.py'],
@@ -41,7 +45,7 @@ exe = EXE(
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
-    target_arch=None,
+    target_arch=TARGET_ARCH,
     codesign_identity=None,
     entitlements_file=None,
 )
@@ -65,6 +69,6 @@ app = BUNDLE(
         'NSHighResolutionCapable': True,
         'CFBundleShortVersionString': VERSION,
         'CFBundleVersion': BUILD,
-        'LSMinimumSystemVersion': '11.0',
+        'LSMinimumSystemVersion': MIN_MACOS,
     },
 )

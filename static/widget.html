@@ -97,9 +97,9 @@
 
     function historyForGraph() {
       if (!lastData) return [];
-      let history = (lastData.history ?? []).filter(p => p.timestamp);
+      let history = (lastData.history || []).filter(p => p.timestamp);
       const lastPoint = history[history.length - 1];
-      if (lastData.timestamp && (!lastPoint?.timestamp || new Date(lastData.timestamp) > new Date(lastPoint.timestamp))) {
+      if (lastData.timestamp && (!lastPoint || !lastPoint.timestamp || new Date(lastData.timestamp) > new Date(lastPoint.timestamp))) {
         history = [...history, {
           value: lastData.value,
           timestamp: lastData.timestamp,

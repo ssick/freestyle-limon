@@ -6,3 +6,4 @@ pyobjc-framework-Quartz==12.2.1
 pyobjc-framework-WebKit==12.2.1
 pyobjc-framework-security==12.2.1
 Pillow==12.3.0
+delocate==0.13.0

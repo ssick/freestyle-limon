@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Builds Freestyle Limón.app.
+# Builds Freestyle Limón.app as a quick single-arch build using this repo's own
+# pyenv-managed .venv - only runs on the same OS version and CPU architecture as
+# this machine. For a portable universal2 build that runs on macOS 10.13+ on both
+# Intel and Apple Silicon, use build_universal2.sh instead.
 #
 # --clean is used as plain hygiene: it discards PyInstaller's local build/
 # directory and its global cache (~/Library/Application Support/pyinstaller/,
@@ -37,7 +40,13 @@ cd "$REPO_ROOT"
 # still works - so a per-build identifier would demand a fresh approval after
 # every single build. Few stable identifiers, approved once, is the workable
 # shape; per-build identity is not.
-VERSION="0.1.0"
+# The suffix shows up as-is in the standard About panel (e.g. "Version 0.1.0-arm64"), so
+# it's clear at a glance which single arch this build contains, next to the universal2
+# build it sits alongside - both may be distributed, just to different target machines.
+# `uname -m`, not $FREESTYLE_LIMON_TARGET_ARCH: that env var isn't exported yet at this
+# point in the script, and target_arch=None (empty override, set further down) means
+# "whatever arch is running this interpreter" - which is exactly what `uname -m` reports.
+VERSION="0.1.0-$(uname -m)"
 BUILD="$(git rev-list --count HEAD)"
 BUNDLE_ID="$BUNDLE_ID_PREFIX"
 if [ "$(git rev-parse --git-dir)" != "$(git rev-parse --git-common-dir)" ]; then
@@ -55,6 +64,8 @@ source .venv/bin/activate
 pip install -q -r requirements-build.txt
 
 echo "==> Running PyInstaller"
+export FREESTYLE_LIMON_TARGET_ARCH=
+export FREESTYLE_LIMON_MIN_MACOS=11.0
 pyinstaller --clean -y freestyle-limon.spec
 
 built_app="$REPO_ROOT/dist/Freestyle Limón.app"

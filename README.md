@@ -49,15 +49,37 @@ pytest
 
 ## Standalone macOS app
 
-For running without a Python install, build a native `.app`:
+For running without a Python install, build a native `.app`. The build produces a
+**universal2** binary (arm64 + x86_64) that runs on **macOS 10.13 or later** — this is
+close to the oldest macOS the current Python packaging ecosystem can target at all
+(Python 3.13+ and most compiled-dependency wheels have moved their own floor to 10.13).
 
-```bash
-./packaging/build.sh
-```
+There are two build scripts:
 
-This produces `dist/Freestyle Limón.app`. The script builds with `--clean` (so no
-leftover PyInstaller state from an earlier build can influence the result) and then
-warns if any *other* copy of the app is installed elsewhere — see the caution below.
+- **`packaging/build.sh`** — quick single-arch build using this repo's own `.venv`. Only
+  runs on the same OS version and CPU architecture as the machine that built it. Good for
+  local testing:
+  ```bash
+  ./packaging/build.sh
+  ```
+- **`packaging/build_universal2.sh`** — the portable build described above (arm64 +
+  x86_64, macOS 10.13+). Requires a separate, non-pyenv Python interpreter, because
+  building against a single-arch `pyenv`-built Python (as `.venv` uses for everything
+  else in this repo) produces a `.app` that only runs on the exact same OS version and
+  CPU architecture as the build machine:
+  1. Install [python.org's official Python 3.12.9 universal2 installer](https://www.python.org/ftp/python/3.12.9/python-3.12.9-macos11.pkg) (despite the `macos11` in the filename, python.org documents this as requiring macOS 10.13+). This installs to `/Library/Frameworks/Python.framework`, separate from `pyenv` — it won't affect the dev environment set up above.
+  2. Run the build script:
+     ```bash
+     ./packaging/build_universal2.sh
+     ```
+     This creates its own `.venv-build` venv from that Python, installs dependencies,
+     merges the two pinned dependencies that don't ship universal2 wheels on PyPI
+     (`Pillow` and `pydantic_core` — merged from separate arm64/x86_64 wheels via
+     [`delocate-merge`](https://github.com/matthew-brett/delocate)), and runs PyInstaller.
+
+Either script produces `dist/Freestyle Limón.app`, builds with `--clean` (so no leftover
+PyInstaller state from an earlier build can influence the result), and then warns if any
+*other* copy of the app is installed elsewhere — see the caution below.
 
 > **Only keep one copy of the app installed.** macOS resolves applications by their
 > bundle identifier, not by path. If a second bundle with the same identifier exists

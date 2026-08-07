@@ -102,12 +102,23 @@ async def _dock_icon_subscriber_loop() -> None:
         AppHelper.callAfter(_render_dock_icon)
 
 
-def _run_server(sock: socket.socket, loop_ready: threading.Event, loop_box: list) -> None:
+def _run_server(
+    sock: socket.socket, loop_ready: threading.Event, loop_box: list, server_box: list
+) -> None:
     async def main() -> None:
         loop_box.append(asyncio.get_running_loop())
+        # timeout_graceful_shutdown defaults to None (wait forever). /api/stream is a
+        # long-lived SSE connection that never completes on its own, and uvicorn only
+        # force-closes an in-progress response's transport on shutdown if it already
+        # completed - so without a cap here, Server.shutdown() hangs on that connection
+        # until _patch_app_delegate_for_graceful_shutdown's own (much longer) join
+        # timeout gives up, making every quit take as long as that fallback allows
+        # instead of however long shutdown actually needs.
+        config = uvicorn.Config(app, host=HOST, log_level="warning", timeout_graceful_shutdown=2)
+        server = uvicorn.Server(config)
+        server_box.append(server)
         loop_ready.set()
-        config = uvicorn.Config(app, host=HOST, log_level="warning")
-        await uvicorn.Server(config).serve(sockets=[sock])
+        await server.serve(sockets=[sock])
 
     asyncio.run(main())
 
@@ -202,7 +213,94 @@ class SettingsApi:
         return credentials.connection_status()
 
 
+def _patch_webkit_navigation_action_for_old_webkit() -> None:
+    """Work around a pywebview 6.2.1 crash on macOS 10.13's WebKit.
+
+    pywebview's Cocoa navigation delegate unconditionally calls
+    ``WKNavigationAction.shouldPerformDownload()``, a property Apple only added in
+    macOS 11.3. On 10.13 the selector doesn't exist at all, so the call raises
+    inside the delegate callback before it reaches the completion handler -
+    WebKit is left waiting forever for a navigation decision (observed as
+    WebCore's "Returning empty document" and a leaked completion handler in
+    Console.app), so the window stays blank. There's no pywebview release newer
+    than 6.2.1 with a fix, and the last version before this call was added
+    (5.3.2) is over a year of other fixes behind.
+
+    Patching pywebview's delegate method directly (to guard the call) was tried
+    first and crashed with "cannot call block without a signature": its
+    `handler` parameter is an Objective-C block, and PyObjC needs bridging
+    metadata for that block that's only wired up when the class is defined, not
+    when a method is reassigned afterwards. Adding the missing selector onto
+    WKNavigationAction itself avoids that entirely - it takes no block argument,
+    and pywebview's original, untouched code just works once the selector exists.
+    """
+    import objc
+    import WebKit
+
+    if hasattr(WebKit.WKNavigationAction, "shouldPerformDownload"):
+        return
+
+    def shouldPerformDownload(self) -> bool:
+        return False
+
+    objc.classAddMethods(
+        WebKit.WKNavigationAction,
+        [objc.selector(shouldPerformDownload, selector=b"shouldPerformDownload", signature=b"B@:")],
+    )
+
+
+def _patch_app_delegate_for_graceful_shutdown(
+    loop: asyncio.AbstractEventLoop, server: uvicorn.Server, server_thread: threading.Thread
+) -> None:
+    """Make Quit wait for the background server to actually stop before exiting.
+
+    Without this, quitting could crash with SIGSEGV in libcrypto.3.dylib:
+    `-[NSApplication terminate:]` calls `exit()` directly, which runs OpenSSL's
+    atexit cleanup (`OPENSSL_cleanup`) - but if `fetch_loop`'s LibreLinkUp
+    request (dispatched via `asyncio.to_thread`) is still using OpenSSL on its
+    executor thread at that exact moment, the cleanup races the live request
+    and segfaults. `task.cancel()` in `app/main.py`'s `lifespan` doesn't stop
+    that: cancelling the asyncio-level task can't interrupt a blocking call
+    already running in its executor thread - only actually waiting for the
+    thread to finish does. `asyncio.run()` already waits for the default
+    executor to drain as part of its own cleanup (this is `asyncio`'s
+    documented behavior, not something added here) - so returning
+    `NSTerminateLater` from `applicationShouldTerminate:`, triggering a
+    graceful `uvicorn` shutdown, and joining the background thread before
+    replying is enough to guarantee no thread is still touching OpenSSL when
+    `exit()` finally runs.
+    """
+    import objc
+    import webview.platforms.cocoa as cocoa
+
+    original = cocoa.BrowserView.AppDelegate.applicationShouldTerminate_
+    shutdown_started = False
+
+    def patched(self, sender):
+        nonlocal shutdown_started
+        should_close = original(self, sender)
+        if not should_close or shutdown_started:
+            return should_close
+        shutdown_started = True
+
+        def shutdown_and_reply() -> None:
+            loop.call_soon_threadsafe(setattr, server, "should_exit", True)
+            server_thread.join(timeout=10)
+            AppHelper.callAfter(
+                AppKit.NSApplication.sharedApplication().replyToApplicationShouldTerminate_, True
+            )
+
+        threading.Thread(target=shutdown_and_reply, daemon=True).start()
+        return AppKit.NSTerminateLater
+
+    cocoa.BrowserView.AppDelegate.applicationShouldTerminate_ = objc.selector(
+        patched, selector=original.selector, signature=original.signature
+    )
+
+
 if __name__ == "__main__":
+    _patch_webkit_navigation_action_for_old_webkit()
+
     # Bind to a random free port instead of a fixed one, so the app doesn't
     # clash with anything else already listening on a well-known port.
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -212,11 +310,14 @@ if __name__ == "__main__":
 
     server_loop_ready = threading.Event()
     server_loop_box: list = []
-    threading.Thread(
-        target=_run_server, args=(sock, server_loop_ready, server_loop_box), daemon=True
-    ).start()
+    server_box: list = []
+    server_thread = threading.Thread(
+        target=_run_server, args=(sock, server_loop_ready, server_loop_box, server_box), daemon=True
+    )
+    server_thread.start()
     server_loop_ready.wait()
     asyncio.run_coroutine_threadsafe(_dock_icon_subscriber_loop(), server_loop_box[0])
+    _patch_app_delegate_for_graceful_shutdown(server_loop_box[0], server_box[0], server_thread)
 
     base_url = f"http://{HOST}:{port}"
     widget_api = WidgetApi(base_url)

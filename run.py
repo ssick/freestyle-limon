@@ -12,6 +12,7 @@ import Foundation
 import uvicorn
 import webview
 from PyObjCTools import AppHelper
+from webview.platforms.cocoa import BrowserView
 
 from app import broadcast, credentials, state
 from app.dock_icon_render import blink_alpha, pad_to_square, render_icon, render_spec
@@ -202,6 +203,22 @@ class SettingsApi:
         return credentials.connection_status()
 
 
+class _AppDelegate(BrowserView.AppDelegate):
+    """Restores the main window when the Dock icon is clicked while minimized.
+
+    pywebview's own AppDelegate doesn't implement
+    applicationShouldHandleReopen:hasVisibleWindows:, so AppKit has nothing
+    telling it to deminiaturize an existing window on Dock reactivation.
+    """
+
+    def applicationShouldHandleReopen_hasVisibleWindows_(self, app, has_visible_windows):
+        if not has_visible_windows:
+            for window in app.windows():
+                window.deminiaturize_(None)
+                window.makeKeyAndOrderFront_(None)
+        return True
+
+
 if __name__ == "__main__":
     # Bind to a random free port instead of a fixed one, so the app doesn't
     # clash with anything else already listening on a well-known port.
@@ -231,4 +248,6 @@ if __name__ == "__main__":
 
     settings_api = SettingsApi(base_url)
     settings_menu = webview.Menu('__app__', [webview.menu.MenuAction('Settings…', settings_api.open)])
+
+    BrowserView.AppDelegate = _AppDelegate
     webview.start(gui="cocoa", menu=[settings_menu])

@@ -135,7 +135,7 @@
       const linePath = chartPoints.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
       const areaPath = `${linePath} L${chartPoints[chartPoints.length - 1].x.toFixed(1)},${CHART_BOTTOM} L${chartPoints[0].x.toFixed(1)},${CHART_BOTTOM} Z`;
 
-      const dots = chartPoints.map(p => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4" fill="${statusColor(p.is_high, p.is_low)}" stroke="#FFFDF3" stroke-width="2" />`).join('');
+      const dots = chartPoints.map((p, i) => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${i === chartPoints.length - 1 ? 6 : 4}" fill="${statusColor(p.is_high, p.is_low)}" stroke="#FFFDF3" stroke-width="2" />`).join('');
 
       let thresholdLines = '';
       if (typeof targetHigh === 'number' && targetHigh >= vMin && targetHigh <= vMax) {
@@ -195,6 +195,7 @@
         crosshair.setAttribute('opacity', 1);
         dot.setAttribute('cx', nearest.x);
         dot.setAttribute('cy', nearest.y);
+        dot.setAttribute('r', nearest === chartPoints[chartPoints.length - 1] ? 7 : 5);
         dot.setAttribute('opacity', 1);
 
         tooltip.textContent = `${nearest.value} mg/dL · ${new Date(nearest.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;

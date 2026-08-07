@@ -1,6 +1,15 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
 
+# Every release gets its own bundle identifier. macOS keys an app's identity -
+# Dock tile, activation, "which window comes forward" - to CFBundleIdentifier,
+# so two builds sharing one identifier are two processes competing to be the
+# same app. packaging/build.sh derives these; the defaults only apply when
+# PyInstaller is invoked directly.
+BUNDLE_ID = os.environ.get('FL_BUNDLE_ID', 'dev.stansick.freestyle-limon')
+VERSION = os.environ.get('FL_VERSION', '0.1.0')
+BUILD = os.environ.get('FL_BUILD', '0')
+
 # Overridable so packaging/build.sh (single-arch pyenv .venv) can request a plain
 # single-arch build instead of universal2, which requires build_universal2.sh's
 # separate python.org interpreter - see CLAUDE.md for why.
@@ -55,10 +64,11 @@ app = BUNDLE(
     coll,
     name='Freestyle Limón.app',
     icon='packaging/icon.icns',
-    bundle_identifier='dev.stansick.freestyle-limon',
+    bundle_identifier=BUNDLE_ID,
     info_plist={
         'NSHighResolutionCapable': True,
-        'CFBundleShortVersionString': '0.1.0',
+        'CFBundleShortVersionString': VERSION,
+        'CFBundleVersion': BUILD,
         'LSMinimumSystemVersion': MIN_MACOS,
     },
 )

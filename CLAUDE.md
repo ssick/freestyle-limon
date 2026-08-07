@@ -128,7 +128,11 @@ This is a single-process FastAPI app with no database and no frontend build step
     ones), so the script merges them with `delocate-merge` before running PyInstaller —
     see the script's comments for the exact mechanism, and its `THIN_PACKAGES` list if a
     future dependency bump introduces another one (PyInstaller's
-    `IncompatibleBinaryArchError` names the offending file when this happens).
+    `IncompatibleBinaryArchError` names the offending file when this happens). Derives the
+    same bundle identifier and version as `build.sh` (same logic, duplicated rather than
+    shared between two standalone shell scripts), but doesn't repeat `build.sh`'s
+    LaunchServices registration/duplicate-copy check — that's about the fast local-iteration
+    loop this script isn't meant for.
 - **A shared `CFBundleIdentifier` makes Finder launch the WRONG BINARY.** Not the wrong
   window, not the wrong focus — a genuinely different executable. Double-clicking
   `dist/Freestyle Limón.app` started

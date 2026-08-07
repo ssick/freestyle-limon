@@ -68,6 +68,22 @@ done
 
 echo "==> Running PyInstaller"
 cd "$REPO_ROOT"
+
+# Same identifier/version derivation as build.sh - see its comments for why this
+# matters (a missing/zero CFBundleVersion breaks macOS's "prefer the newer
+# build" tie-break between bundles sharing an identifier). Run after cd'ing to
+# REPO_ROOT so `git` resolves this repo regardless of the invoking directory.
+BUNDLE_ID_PREFIX="dev.stansick.freestyle-limon"
+VERSION="0.1.0"
+BUILD="$(git rev-list --count HEAD)"
+BUNDLE_ID="$BUNDLE_ID_PREFIX"
+if [ "$(git rev-parse --git-dir)" != "$(git rev-parse --git-common-dir)" ]; then
+  BUNDLE_ID="${BUNDLE_ID_PREFIX}.worktree"
+fi
+export FL_BUNDLE_ID="$BUNDLE_ID"
+export FL_VERSION="$VERSION"
+export FL_BUILD="$BUILD"
+
 pyinstaller -y freestyle-limon.spec
 
 echo "==> Verifying architectures"

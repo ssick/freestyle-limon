@@ -117,7 +117,10 @@ This is a single-process FastAPI app with no database and no frontend build step
     one arch's slice. It builds with `--clean` (so no leftover PyInstaller state from an
     earlier build can influence the result), derives this build's bundle identifier and
     version (see the "duplicate bundles" bullets below), and warns if any other bundle
-    registered with macOS still shares the resulting identifier.
+    registered with macOS still shares the resulting identifier. Its `CFBundleShortVersionString`
+    gets a `-dev` suffix (e.g. `0.1.0-dev`), visible as-is in the standard About panel
+    (pywebview wires this up automatically, no extra menu code needed) — this build is
+    never meant to be distributed, so it should never look identical to a release build.
   - **`packaging/build_universal2.sh`** — the portable release build: `target_arch=` is
     left at its `universal2` default, producing a `.app` that runs on **macOS 10.13+** on
     both Intel and Apple Silicon (the practical floor of the entire current
@@ -128,11 +131,12 @@ This is a single-process FastAPI app with no database and no frontend build step
     ones), so the script merges them with `delocate-merge` before running PyInstaller —
     see the script's comments for the exact mechanism, and its `THIN_PACKAGES` list if a
     future dependency bump introduces another one (PyInstaller's
-    `IncompatibleBinaryArchError` names the offending file when this happens). Derives the
-    same bundle identifier and version as `build.sh` (same logic, duplicated rather than
+    `IncompatibleBinaryArchError` names the offending file when this happens). Derives its
+    bundle identifier the same way `build.sh` does (same logic, duplicated rather than
     shared between two standalone shell scripts), but doesn't repeat `build.sh`'s
     LaunchServices registration/duplicate-copy check — that's about the fast local-iteration
-    loop this script isn't meant for.
+    loop this script isn't meant for. Its version has no `-dev` suffix, since this is the
+    actual release build.
 - **A shared `CFBundleIdentifier` makes Finder launch the WRONG BINARY.** Not the wrong
   window, not the wrong focus — a genuinely different executable. Double-clicking
   `dist/Freestyle Limón.app` started

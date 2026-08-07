@@ -40,7 +40,10 @@ cd "$REPO_ROOT"
 # still works - so a per-build identifier would demand a fresh approval after
 # every single build. Few stable identifiers, approved once, is the workable
 # shape; per-build identity is not.
-VERSION="0.1.0"
+# The "-dev" suffix shows up as-is in the standard About panel ("Version 0.1.0-dev"),
+# so this build is never mistaken for the universal2 release build it sits next to -
+# this script's output isn't meant to be distributed at all, only run locally.
+VERSION="0.1.0-dev"
 BUILD="$(git rev-list --count HEAD)"
 BUNDLE_ID="$BUNDLE_ID_PREFIX"
 if [ "$(git rev-parse --git-dir)" != "$(git rev-parse --git-common-dir)" ]; then

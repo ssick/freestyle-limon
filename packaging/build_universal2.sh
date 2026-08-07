@@ -73,6 +73,9 @@ cd "$REPO_ROOT"
 # matters (a missing/zero CFBundleVersion breaks macOS's "prefer the newer
 # build" tie-break between bundles sharing an identifier). Run after cd'ing to
 # REPO_ROOT so `git` resolves this repo regardless of the invoking directory.
+#
+# Unlike build.sh's VERSION, this one has no "-dev" suffix - it's the real
+# release version, shown as-is in the standard About panel.
 BUNDLE_ID_PREFIX="dev.stansick.freestyle-limon"
 VERSION="0.1.0"
 BUILD="$(git rev-list --count HEAD)"

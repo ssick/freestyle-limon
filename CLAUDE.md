@@ -109,19 +109,20 @@ This is a single-process FastAPI app with no database and no frontend build step
   two scripts need different values from the same spec file — see each script's own
   comments:
   - **`packaging/build.sh`** — quick single-arch build against this repo's own
-    `pyenv`-managed `.venv`, for local testing. Overrides the env vars back to a plain
-    single-arch build targeting `11.0`, since `pyenv` builds a single-architecture Python
-    targeting whatever OS it was compiled on (on this repo's dev machines, arm64 with a
-    very high deployment target) — requesting `universal2` against that interpreter fails
-    with PyInstaller's `IncompatibleBinaryArchError`, since the interpreter itself is only
-    one arch's slice. It builds with `--clean` (so no leftover PyInstaller state from an
-    earlier build can influence the result), derives this build's bundle identifier and
-    version (see the "duplicate bundles" bullets below), and warns if any other bundle
-    registered with macOS still shares the resulting identifier. Its `CFBundleShortVersionString`
-    gets a `-dev-$(uname -m)` suffix (e.g. `0.1.0-dev-arm64`), visible as-is in the standard
-    About panel (pywebview wires this up automatically, no extra menu code needed) — this
-    build is never meant to be distributed, so it should never look identical to a release
-    build, and the arch is worth seeing at a glance since it varies by build machine.
+    `pyenv`-managed `.venv`. Overrides the env vars back to a plain single-arch build
+    targeting `11.0`, since `pyenv` builds a single-architecture Python targeting whatever
+    OS it was compiled on (on this repo's dev machines, arm64 with a very high deployment
+    target) — requesting `universal2` against that interpreter fails with PyInstaller's
+    `IncompatibleBinaryArchError`, since the interpreter itself is only one arch's slice.
+    It builds with `--clean` (so no leftover PyInstaller state from an earlier build can
+    influence the result), derives this build's bundle identifier and version (see the
+    "duplicate bundles" bullets below), and warns if any other bundle registered with
+    macOS still shares the resulting identifier. Its `CFBundleShortVersionString` gets a
+    `-$(uname -m)` suffix (e.g. `0.1.0-arm64`), visible as-is in the standard About panel
+    (pywebview wires this up automatically, no extra menu code needed) — both this and the
+    universal2 build may be distributed, just to different target machines (this one only
+    runs on the exact OS version and CPU architecture it was built on), so the arch is
+    worth seeing at a glance to tell them apart.
   - **`packaging/build_universal2.sh`** — the portable release build: `target_arch=` is
     left at its `universal2` default, producing a `.app` that runs on **macOS 10.13+** on
     both Intel and Apple Silicon (the practical floor of the entire current
@@ -138,7 +139,8 @@ This is a single-process FastAPI app with no database and no frontend build step
     LaunchServices registration/duplicate-copy check — that's about the fast local-iteration
     loop this script isn't meant for. Its version gets a `-universal2` suffix instead (or
     whatever `FREESTYLE_LIMON_TARGET_ARCH` resolves to, mirroring the spec's own default
-    rather than hardcoding it) — no `-dev`, since this is the actual release build.
+    rather than hardcoding it), for the same reason: telling it apart from `build.sh`'s
+    output at a glance in the About panel.
 - **A shared `CFBundleIdentifier` makes Finder launch the WRONG BINARY.** Not the wrong
   window, not the wrong focus — a genuinely different executable. Double-clicking
   `dist/Freestyle Limón.app` started

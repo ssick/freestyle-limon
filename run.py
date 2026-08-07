@@ -107,7 +107,14 @@ def _run_server(
 ) -> None:
     async def main() -> None:
         loop_box.append(asyncio.get_running_loop())
-        config = uvicorn.Config(app, host=HOST, log_level="warning")
+        # timeout_graceful_shutdown defaults to None (wait forever). /api/stream is a
+        # long-lived SSE connection that never completes on its own, and uvicorn only
+        # force-closes an in-progress response's transport on shutdown if it already
+        # completed - so without a cap here, Server.shutdown() hangs on that connection
+        # until _patch_app_delegate_for_graceful_shutdown's own (much longer) join
+        # timeout gives up, making every quit take as long as that fallback allows
+        # instead of however long shutdown actually needs.
+        config = uvicorn.Config(app, host=HOST, log_level="warning", timeout_graceful_shutdown=2)
         server = uvicorn.Server(config)
         server_box.append(server)
         loop_ready.set()

@@ -74,10 +74,12 @@ cd "$REPO_ROOT"
 # build" tie-break between bundles sharing an identifier). Run after cd'ing to
 # REPO_ROOT so `git` resolves this repo regardless of the invoking directory.
 #
-# Unlike build.sh's VERSION, this one has no "-dev" suffix - it's the real
-# release version, shown as-is in the standard About panel.
+# Unlike build.sh's VERSION, this one has no "-dev" suffix - it's the real release
+# version. The arch suffix mirrors whatever freestyle-limon.spec will actually build
+# (its own default, "universal2", unless FREESTYLE_LIMON_TARGET_ARCH is overridden -
+# this script never overrides it itself), rather than hardcoding the common case.
 BUNDLE_ID_PREFIX="dev.stansick.freestyle-limon"
-VERSION="0.1.0"
+VERSION="0.1.0-${FREESTYLE_LIMON_TARGET_ARCH:-universal2}"
 BUILD="$(git rev-list --count HEAD)"
 BUNDLE_ID="$BUNDLE_ID_PREFIX"
 if [ "$(git rev-parse --git-dir)" != "$(git rev-parse --git-common-dir)" ]; then

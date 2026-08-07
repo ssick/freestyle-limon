@@ -40,10 +40,13 @@ cd "$REPO_ROOT"
 # still works - so a per-build identifier would demand a fresh approval after
 # every single build. Few stable identifiers, approved once, is the workable
 # shape; per-build identity is not.
-# The "-dev" suffix shows up as-is in the standard About panel ("Version 0.1.0-dev"),
-# so this build is never mistaken for the universal2 release build it sits next to -
-# this script's output isn't meant to be distributed at all, only run locally.
-VERSION="0.1.0-dev"
+# The suffix shows up as-is in the standard About panel (e.g. "Version 0.1.0-dev-arm64"),
+# so this build is never mistaken for the universal2 release build it sits next to - both
+# that it isn't meant to be distributed, and which single arch it actually contains.
+# `uname -m`, not $FREESTYLE_LIMON_TARGET_ARCH: that env var isn't exported yet at this
+# point in the script, and target_arch=None (empty override, set further down) means
+# "whatever arch is running this interpreter" - which is exactly what `uname -m` reports.
+VERSION="0.1.0-dev-$(uname -m)"
 BUILD="$(git rev-list --count HEAD)"
 BUNDLE_ID="$BUNDLE_ID_PREFIX"
 if [ "$(git rev-parse --git-dir)" != "$(git rev-parse --git-common-dir)" ]; then
